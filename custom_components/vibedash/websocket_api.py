@@ -1,0 +1,389 @@
+"""WebSocket API for VibeDash."""
+
+from __future__ import annotations
+
+import json
+import logging
+from datetime import datetime, timedelta
+from typing import Any
+
+import voluptuous as vol
+
+from homeassistant.components import websocket_api
+from homeassistant.core import HomeAssistant, callback
+
+from .const import CONF_AI_TASK_ENTRY, DOMAIN, TIME_RANGES
+
+_LOGGER = logging.getLogger(__name__)
+
+ENTITY_SELECTION_PROMPT = """\
+You are a Home Assistant entity selector. Given a user's dashboard request, \
+select the most relevant entities from the available list.
+
+{entity_context}
+
+User request: {prompt}
+
+Return a JSON object with a single key "entity_ids" containing an array of \
+entity_id strings that are most relevant to the user's request. \
+Only include entities from the available list above. \
+Select entities that would be useful for creating a dashboard visualization. \
+Limit to 20 most relevant entities.
+
+Return ONLY valid JSON, no other text."""
+
+DASHBOARD_GENERATION_PROMPT = """\
+You are a Home Assistant dashboard generator. Create a dashboard layout as JSON \
+based on the user's request and the available entity data.
+
+{entity_details}
+
+Available card types:
+- "chart": Time-series graph. Fields: type, title, chart_type ("line" or "bar"), \
+entities (array of entity_ids), time_range ("1h", "6h", "24h", "7d", or "30d")
+- "metric": Single big number. Fields: type, title, entity (single entity_id)
+- "gauge": Circular gauge for bounded values. Fields: type, title, \
+entity (single entity_id), min (number), max (number)
+- "entity_list": Table of entities. Fields: type, title, \
+entities (array of entity_ids)
+- "markdown": Text/analysis card. Fields: type, title, content (markdown text)
+
+Rules:
+- Only use entity_ids from the selected entities above
+- Choose appropriate card types for the data being shown
+- Use "chart" for trends and history, "metric" for single current values, \
+"gauge" for percentages or bounded ranges (like battery, humidity)
+- Include a "markdown" card with a brief analysis or summary when appropriate
+- For chart entities, prefer grouping related sensors (e.g., all temperatures) \
+in a single chart
+- Create 3-8 cards total for a good dashboard layout
+
+User request: {prompt}
+
+Return ONLY a valid JSON object with this structure:
+{{"title": "Dashboard Title", "cards": [...]}}
+No other text, just the JSON."""
+
+
+def async_register_commands(hass: HomeAssistant) -> None:
+    """Register WebSocket commands."""
+    websocket_api.async_register_command(hass, ws_generate)
+    websocket_api.async_register_command(hass, ws_history)
+    websocket_api.async_register_command(hass, ws_entities)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/generate",
+        vol.Required("prompt"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_generate(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle dashboard generation request (two-pass LLM)."""
+    prompt = msg["prompt"]
+
+    # Get the config entry
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        connection.send_error(msg["id"], "not_configured", "VibeDash is not configured")
+        return
+
+    entry = entries[0]
+    ai_task_entity = entry.data.get(CONF_AI_TASK_ENTRY)
+    if not ai_task_entity:
+        connection.send_error(
+            msg["id"], "no_ai_task", "No AI Task provider configured"
+        )
+        return
+
+    entity_cache = hass.data[DOMAIN].get("entity_cache")
+    if not entity_cache:
+        connection.send_error(
+            msg["id"], "no_cache", "Entity cache not initialized"
+        )
+        return
+
+    try:
+        # Pass 1: Entity selection
+        entity_context = entity_cache.get_entity_selection_context(prompt)
+        selection_prompt = ENTITY_SELECTION_PROMPT.format(
+            entity_context=entity_context,
+            prompt=prompt,
+        )
+
+        _LOGGER.debug("Pass 1: Entity selection for prompt: %s", prompt)
+
+        result = await hass.services.async_call(
+            "ai_task",
+            "generate_data",
+            {
+                "entity_id": ai_task_entity,
+                "instructions": selection_prompt,
+            },
+            blocking=True,
+            return_response=True,
+        )
+
+        # Parse entity selection response
+        entity_ids = _parse_entity_ids(result.get("data", ""))
+
+        if not entity_ids:
+            connection.send_error(
+                msg["id"],
+                "no_entities",
+                "LLM could not identify relevant entities for your request",
+            )
+            return
+
+        _LOGGER.debug("Pass 1 selected %d entities: %s", len(entity_ids), entity_ids)
+
+        # Pass 2: Dashboard generation with detailed entity context
+        entity_details = entity_cache.get_detailed_context(entity_ids)
+        dashboard_prompt = DASHBOARD_GENERATION_PROMPT.format(
+            entity_details=entity_details,
+            prompt=prompt,
+        )
+
+        _LOGGER.debug("Pass 2: Dashboard generation")
+
+        result = await hass.services.async_call(
+            "ai_task",
+            "generate_data",
+            {
+                "entity_id": ai_task_entity,
+                "instructions": dashboard_prompt,
+            },
+            blocking=True,
+            return_response=True,
+        )
+
+        # Parse dashboard response
+        dashboard = _parse_dashboard(result.get("data", ""))
+
+        if not dashboard:
+            connection.send_error(
+                msg["id"],
+                "parse_error",
+                "Failed to parse dashboard from LLM response",
+            )
+            return
+
+        # Validate entity references exist
+        _validate_dashboard_entities(hass, dashboard)
+
+        connection.send_result(msg["id"], {"dashboard": dashboard})
+
+    except Exception:
+        _LOGGER.exception("Error generating dashboard")
+        connection.send_error(
+            msg["id"], "generation_error", "Failed to generate dashboard"
+        )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/history",
+        vol.Required("entity_ids"): [str],
+        vol.Required("time_range"): vol.In(list(TIME_RANGES.keys())),
+    }
+)
+@websocket_api.async_response
+async def ws_history(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Fetch entity history data for charts."""
+    entity_ids = msg["entity_ids"]
+    hours = TIME_RANGES[msg["time_range"]]
+
+    end_time = datetime.now()
+    start_time = end_time - timedelta(hours=hours)
+
+    try:
+        # Use the recorder/history API
+        from homeassistant.components.recorder import history
+
+        history_data = await hass.async_add_executor_job(
+            _get_history, hass, start_time, end_time, entity_ids
+        )
+
+        # Format for Chart.js
+        formatted: dict[str, list[dict[str, Any]]] = {}
+        for entity_id, states in history_data.items():
+            points = []
+            for state in states:
+                try:
+                    value = float(state["state"])
+                    points.append({"t": state["last_changed"], "y": value})
+                except (ValueError, TypeError):
+                    continue
+            formatted[entity_id] = points
+
+        connection.send_result(msg["id"], {"history": formatted})
+
+    except Exception:
+        _LOGGER.exception("Error fetching history")
+        connection.send_error(
+            msg["id"], "history_error", "Failed to fetch history data"
+        )
+
+
+def _get_history(
+    hass: HomeAssistant,
+    start_time: datetime,
+    end_time: datetime,
+    entity_ids: list[str],
+) -> dict[str, list[dict[str, Any]]]:
+    """Fetch history from recorder (runs in executor)."""
+    from homeassistant.components.recorder import history as recorder_history
+
+    # Use the get_significant_states API
+    states = recorder_history.get_significant_states(
+        hass,
+        start_time,
+        end_time,
+        entity_ids,
+        significant_changes_only=False,
+    )
+
+    result: dict[str, list[dict[str, Any]]] = {}
+    for entity_id, state_list in states.items():
+        result[entity_id] = [
+            {
+                "state": s.state,
+                "last_changed": s.last_changed.isoformat(),
+            }
+            for s in state_list
+            if s.state not in ("unknown", "unavailable")
+        ]
+
+    return result
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/entities",
+    }
+)
+@callback
+def ws_entities(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return cached entity catalog."""
+    entity_cache = hass.data[DOMAIN].get("entity_cache")
+    if not entity_cache:
+        connection.send_error(
+            msg["id"], "no_cache", "Entity cache not initialized"
+        )
+        return
+
+    cache = entity_cache.cache
+    entities = [info.to_dict() for info in cache.entities.values()]
+    domains = {k: len(v) for k, v in cache.domains.items()}
+    areas = {k: len(v) for k, v in cache.areas.items()}
+
+    connection.send_result(
+        msg["id"],
+        {
+            "entities": entities,
+            "domains": domains,
+            "areas": areas,
+            "total": len(entities),
+        },
+    )
+
+
+def _parse_entity_ids(data: Any) -> list[str]:
+    """Parse entity IDs from LLM response."""
+    text = str(data) if not isinstance(data, str) else data
+
+    # Try to extract JSON from the response
+    json_obj = _extract_json(text)
+    if json_obj and "entity_ids" in json_obj:
+        ids = json_obj["entity_ids"]
+        if isinstance(ids, list):
+            return [str(eid) for eid in ids if isinstance(eid, str)]
+
+    # Fallback: look for entity_id patterns in text
+    import re
+
+    return re.findall(r"[a-z_]+\.[a-z0-9_]+", text)
+
+
+def _parse_dashboard(data: Any) -> dict[str, Any] | None:
+    """Parse dashboard JSON from LLM response."""
+    text = str(data) if not isinstance(data, str) else data
+
+    json_obj = _extract_json(text)
+    if json_obj and "cards" in json_obj:
+        return json_obj
+
+    return None
+
+
+def _extract_json(text: str) -> dict[str, Any] | None:
+    """Extract a JSON object from text that may contain markdown fences."""
+    # Strip markdown code fences
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        # Remove first and last fence lines
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines)
+
+    # Try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try to find JSON object in text
+    depth = 0
+    start = None
+    for i, ch in enumerate(text):
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            depth -= 1
+            if depth == 0 and start is not None:
+                try:
+                    return json.loads(text[start : i + 1])
+                except json.JSONDecodeError:
+                    start = None
+
+    return None
+
+
+def _validate_dashboard_entities(
+    hass: HomeAssistant, dashboard: dict[str, Any]
+) -> None:
+    """Remove references to entities that don't exist."""
+    for card in dashboard.get("cards", []):
+        card_type = card.get("type")
+
+        if card_type in ("chart", "entity_list"):
+            entities = card.get("entities", [])
+            card["entities"] = [
+                eid for eid in entities if hass.states.get(eid) is not None
+            ]
+        elif card_type in ("metric", "gauge"):
+            entity = card.get("entity")
+            if entity and hass.states.get(entity) is None:
+                card["_invalid"] = True
+
+    # Remove invalid cards
+    dashboard["cards"] = [
+        c for c in dashboard.get("cards", []) if not c.get("_invalid")
+    ]
