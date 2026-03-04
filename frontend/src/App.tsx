@@ -53,7 +53,7 @@ export function App() {
     <div className="flex h-full flex-col bg-background">
       <PromptBar onSubmit={handleSubmit} loading={loading} history={history} />
 
-      <main className="flex-1 overflow-y-auto">
+      <main className="flex flex-1 flex-col overflow-y-auto">
         {error && (
           <div className="mx-auto max-w-5xl px-4 pt-4">
             <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
@@ -72,7 +72,7 @@ export function App() {
               <span>{error}</span>
               <button
                 onClick={() => setError(null)}
-                className="ml-auto text-destructive hover:text-destructive/80"
+                className="ml-auto cursor-pointer text-destructive hover:text-destructive/80"
                 aria-label="Dismiss error"
               >
                 <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
@@ -95,7 +95,7 @@ export function App() {
         )}
 
         {!loading && spec && (
-          <div className="mx-auto max-w-5xl px-4 py-6">
+          <div className="mx-auto max-w-5xl px-6 py-6">
             <JSONUIProvider registry={registry}>
               <Renderer spec={spec} registry={registry} />
             </JSONUIProvider>

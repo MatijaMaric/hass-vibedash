@@ -49,7 +49,7 @@ export function PromptBar({ onSubmit, loading, history }: PromptBarProps) {
             </span>
           </div>
 
-          <div className="relative flex-1">
+          <div className="flex flex-1 items-center gap-2 rounded-full border border-border bg-card px-4 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/30">
             <input
               type="text"
               value={input}
@@ -57,12 +57,12 @@ export function PromptBar({ onSubmit, loading, history }: PromptBarProps) {
               onKeyDown={handleKeyDown}
               placeholder="Describe your dashboard..."
               disabled={loading}
-              className="w-full rounded-full border border-border bg-card px-4 py-2 pr-10 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:opacity-60"
+              className="flex-1 bg-transparent py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none disabled:opacity-60"
             />
             <button
               type="submit"
               disabled={loading || !input.trim()}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-full bg-primary p-1.5 text-primary-foreground transition-colors hover:bg-primary/80 disabled:opacity-40"
+              className="shrink-0 cursor-pointer rounded-full bg-primary p-1.5 text-primary-foreground transition-colors hover:bg-primary/80 disabled:cursor-default disabled:opacity-40"
               aria-label="Generate dashboard"
             >
               {loading ? (
@@ -103,7 +103,7 @@ export function PromptBar({ onSubmit, loading, history }: PromptBarProps) {
                 key={i}
                 onClick={() => onSubmit(prompt)}
                 disabled={loading}
-                className="shrink-0 rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-40"
+                className="shrink-0 cursor-pointer rounded-full border border-border bg-card px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-default disabled:opacity-40"
               >
                 {prompt.length > 40 ? prompt.slice(0, 40) + "..." : prompt}
               </button>
@@ -142,7 +142,7 @@ export function EmptyState({
           <button
             key={suggestion}
             onClick={() => onSuggestionClick(suggestion)}
-            className="rounded-lg border border-border bg-card p-3 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            className="cursor-pointer rounded-lg border border-border bg-card p-3 text-left text-sm text-foreground transition-colors hover:bg-muted"
           >
             {suggestion}
           </button>

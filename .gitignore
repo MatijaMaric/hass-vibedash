@@ -1,0 +1,10 @@
+# Frontend build artifact — generated at release time by CI
+custom_components/vibedash/frontend/vibedash-panel.js
+
+# Node
+frontend/node_modules/
+
+# Python
+__pycache__/
+*.pyc
+.venv/
