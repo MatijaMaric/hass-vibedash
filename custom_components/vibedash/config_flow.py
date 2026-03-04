@@ -33,20 +33,10 @@ class VibeDashConfigFlow(ConfigFlow, domain=DOMAIN):
                 data=user_input,
             )
 
-        # Find available AI Task config entries
-        ai_task_entries = self.hass.config_entries.async_entries("ai_task")
-        if not ai_task_entries:
+        # Find available AI Task entities (registered by providers like OpenAI, Ollama, etc.)
+        ai_task_entities = self.hass.states.async_entity_ids("ai_task")
+        if not ai_task_entities:
             return self.async_abort(reason="no_ai_task")
-
-        options = [
-            selector(
-                {
-                    "config_entry": {
-                        "integration": "ai_task",
-                    }
-                }
-            )
-        ]
 
         return self.async_show_form(
             step_id="user",
@@ -54,8 +44,8 @@ class VibeDashConfigFlow(ConfigFlow, domain=DOMAIN):
                 {
                     vol.Required(CONF_AI_TASK_ENTRY): selector(
                         {
-                            "config_entry": {
-                                "integration": "ai_task",
+                            "entity": {
+                                "domain": "ai_task",
                             }
                         }
                     ),
