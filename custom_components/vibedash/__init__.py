@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import logging
 from pathlib import Path
 
@@ -17,6 +18,8 @@ from .websocket_api import async_register_commands
 _LOGGER = logging.getLogger(__name__)
 
 FRONTEND_DIR = Path(__file__).parent / "frontend"
+_MANIFEST = json.loads((Path(__file__).parent / "manifest.json").read_text())
+_VERSION = _MANIFEST["version"]
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -40,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register frontend panel
     frontend_path = str(FRONTEND_DIR)
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(f"/{PANEL_FRONTEND_PATH}", frontend_path, cache_headers=True)]
+        [StaticPathConfig(f"/{PANEL_FRONTEND_PATH}", frontend_path, cache_headers=False)]
     )
 
     frontend.async_register_built_in_panel(
@@ -52,7 +55,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         config={
             "_panel_custom": {
                 "name": "vibedash-panel",
-                "module_url": f"/{PANEL_FRONTEND_PATH}/vibedash-panel.js",
+                "module_url": f"/{PANEL_FRONTEND_PATH}/vibedash-panel.js?v={_VERSION}",
                 "embed_iframe": False,
             }
         },
