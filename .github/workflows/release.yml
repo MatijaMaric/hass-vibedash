@@ -44,7 +44,43 @@ jobs:
           npm run build
 
       - name: Package integration
-        run: cd custom_components && zip -r ../vibedash.zip vibedash/
+        run: |
+          cd custom_components
+          zip -r ../vibedash.zip vibedash/ \
+            --exclude "vibedash/__pycache__/*" \
+            --exclude "vibedash/**/__pycache__/*" \
+            --exclude "vibedash/*.pyc" \
+            --exclude "vibedash/**/*.pyc"
+
+      - name: Verify zip contents
+        run: |
+          echo "=== Zip contents ==="
+          unzip -l vibedash.zip
+          echo ""
+          echo "=== Checking required files ==="
+          REQUIRED_FILES=(
+            "vibedash/__init__.py"
+            "vibedash/manifest.json"
+            "vibedash/config_flow.py"
+            "vibedash/websocket_api.py"
+            "vibedash/frontend/vibedash-panel.js"
+          )
+          MISSING=0
+          for f in "${REQUIRED_FILES[@]}"; do
+            if unzip -l vibedash.zip | grep -q "$f"; then
+              echo "  OK  $f"
+            else
+              echo "  MISSING  $f"
+              MISSING=1
+            fi
+          done
+          if [ "$MISSING" -ne 0 ]; then
+            echo ""
+            echo "ERROR: One or more required files are missing from vibedash.zip"
+            exit 1
+          fi
+          echo ""
+          echo "All required files present."
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
