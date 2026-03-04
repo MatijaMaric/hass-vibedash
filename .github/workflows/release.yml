@@ -45,12 +45,12 @@ jobs:
 
       - name: Package integration
         run: |
-          cd custom_components
-          zip -r ../vibedash.zip vibedash/ \
-            --exclude "vibedash/__pycache__/*" \
-            --exclude "vibedash/**/__pycache__/*" \
-            --exclude "vibedash/*.pyc" \
-            --exclude "vibedash/**/*.pyc"
+          cd custom_components/vibedash
+          zip -r ../../vibedash.zip . \
+            --exclude "./__pycache__/*" \
+            --exclude "./**/__pycache__/*" \
+            --exclude "./*.pyc" \
+            --exclude "./**/*.pyc"
 
       - name: Verify zip contents
         run: |
@@ -59,11 +59,11 @@ jobs:
           echo ""
           echo "=== Checking required files ==="
           REQUIRED_FILES=(
-            "vibedash/__init__.py"
-            "vibedash/manifest.json"
-            "vibedash/config_flow.py"
-            "vibedash/websocket_api.py"
-            "vibedash/frontend/vibedash-panel.js"
+            "__init__.py"
+            "manifest.json"
+            "config_flow.py"
+            "websocket_api.py"
+            "frontend/vibedash-panel.js"
           )
           MISSING=0
           for f in "${REQUIRED_FILES[@]}"; do
