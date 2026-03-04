@@ -122,6 +122,7 @@ async def ws_generate(
             "ai_task",
             "generate_data",
             {
+                "task_name": "vibedash_entity_selection",
                 "entity_id": ai_task_entity,
                 "instructions": selection_prompt,
             },
@@ -155,6 +156,7 @@ async def ws_generate(
             "ai_task",
             "generate_data",
             {
+                "task_name": "vibedash_dashboard_generation",
                 "entity_id": ai_task_entity,
                 "instructions": dashboard_prompt,
             },
