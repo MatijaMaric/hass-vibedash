@@ -108,6 +108,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   name={entityId}
                   fill={CHART_COLORS[i % CHART_COLORS.length]}
                   radius={[4, 4, 0, 0]}
+                  isAnimationActive={false}
                 />
               ))}
             </BarChart>
@@ -147,6 +148,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   stroke={CHART_COLORS[i % CHART_COLORS.length]}
                   fill={CHART_COLORS[i % CHART_COLORS.length]}
                   fillOpacity={0.15}
+                  isAnimationActive={false}
                 />
               ))}
             </AreaChart>
@@ -184,8 +186,9 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   dataKey={entityId}
                   name={entityId}
                   stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                  dot={data.length <= 80}
+                  dot={false}
                   strokeWidth={2}
+                  isAnimationActive={false}
                 />
               ))}
             </LineChart>

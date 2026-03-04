@@ -226,7 +226,8 @@ async def ws_history(
             _get_history, hass, start_time, end_time, entity_ids
         )
 
-        # Format for Recharts (t/y pairs per entity)
+        # Format for Recharts (t/y pairs per entity), downsampled to MAX_CHART_POINTS
+        MAX_CHART_POINTS = 300
         formatted: dict[str, list[dict[str, Any]]] = {}
         for entity_id, states in history_data.items():
             points = []
@@ -236,7 +237,7 @@ async def ws_history(
                     points.append({"t": state["last_changed"], "y": value})
                 except (ValueError, TypeError):
                     continue
-            formatted[entity_id] = points
+            formatted[entity_id] = _downsample(points, MAX_CHART_POINTS)
 
         connection.send_result(msg["id"], {"history": formatted})
 
@@ -310,6 +311,14 @@ def ws_entities(
             "total": len(entities),
         },
     )
+
+
+def _downsample(points: list[dict[str, Any]], max_points: int) -> list[dict[str, Any]]:
+    """Uniformly downsample a list of time-series points to at most max_points."""
+    if len(points) <= max_points:
+        return points
+    step = (len(points) - 1) / (max_points - 1)
+    return [points[round(i * step)] for i in range(max_points)]
 
 
 def _parse_entity_ids(data: Any) -> list[str]:
