@@ -209,9 +209,9 @@ async def ws_history(
 
     try:
         # Use the recorder/history API
-        from homeassistant.components.recorder import history
+        from homeassistant.components.recorder import get_instance, history
 
-        history_data = await hass.async_add_executor_job(
+        history_data = await get_instance(hass).async_add_executor_job(
             _get_history, hass, start_time, end_time, entity_ids
         )
 
