@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
@@ -42,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         [StaticPathConfig(f"/{PANEL_FRONTEND_PATH}", frontend_path, cache_headers=True)]
     )
 
-    hass.components.frontend.async_register_built_in_panel(
+    frontend.async_register_built_in_panel(
         component_name="custom",
         sidebar_title=PANEL_TITLE,
         sidebar_icon=PANEL_ICON,
@@ -69,7 +70,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entity_cache.cleanup()
 
     # Remove panel
-    hass.components.frontend.async_remove_panel(PANEL_URL.lstrip("/"))
+    frontend.async_remove_panel(PANEL_URL.lstrip("/"))
 
     hass.data.pop(DOMAIN, None)
     return True
