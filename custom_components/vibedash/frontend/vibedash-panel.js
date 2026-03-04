@@ -1080,9 +1080,10 @@ class VibeDashPanel extends HTMLElement {
 
     content.innerHTML = html;
 
-    // Post-render chart init
+    // Post-render async card init
     (cards || []).forEach((card, i) => {
       if (card.type === "chart") this._initChart(card, i);
+      if (card.type === "entity_list" && card.time_range) this._initEntityList(card, i);
     });
   }
 
@@ -1094,7 +1095,13 @@ class VibeDashPanel extends HTMLElement {
     switch (card.type) {
       case "metric":      return this._renderMetric(card);
       case "gauge":       return this._renderGauge(card, index);
-      case "entity_list": return this._renderEntityList(card);
+      case "entity_list":
+        if (card.time_range) {
+          return `<div class="chart-outer" id="entity-list-container-${index}">
+            <div class="chart-placeholder"><div class="spinner-sm"></div> Loading…</div>
+          </div>`;
+        }
+        return this._renderEntityList(card);
       case "markdown":    return this._renderMarkdownCard(card);
       case "chart":
         return `
@@ -1201,6 +1208,66 @@ class VibeDashPanel extends HTMLElement {
 
   _renderMarkdownCard(card) {
     return `<div class="markdown-body">${renderMarkdown(card.content || "")}</div>`;
+  }
+
+  // ----------------------------------------------------------
+  // Entity list init (with time-range delta computation)
+  // ----------------------------------------------------------
+
+  async _initEntityList(card, index) {
+    const container = this.shadowRoot.getElementById(`entity-list-container-${index}`);
+    if (!container) return;
+
+    const entities = card.entities || [];
+    if (!entities.length) {
+      container.innerHTML = this._renderEntityList(card);
+      return;
+    }
+
+    let historyData;
+    try {
+      const result = await sendWsCommand(this._hass, {
+        type: "vibedash/history",
+        entity_ids: entities,
+        time_range: card.time_range,
+      });
+      historyData = result.history;
+    } catch (err) {
+      console.error("Failed to fetch entity list history:", err);
+      container.innerHTML = this._renderEntityList(card);
+      return;
+    }
+
+    // Compute delta (last - first) for each entity so cumulative sensors
+    // (e.g. energy kWh) show usage over the selected period, not lifetime totals.
+    const rows = entities.map((entityId) => {
+      const state  = this._hass?.states?.[entityId];
+      const name   = state?.attributes?.friendly_name || entityId;
+      const unit   = state?.attributes?.unit_of_measurement || "";
+      const points = historyData[entityId] || [];
+
+      let display;
+      if (points.length >= 2) {
+        const first = points[0].y;
+        const last  = points[points.length - 1].y;
+        const delta = last - first;
+        display = delta.toFixed(3).replace(/\.?0+$/, "");
+      } else if (points.length === 1) {
+        display = String(points[0].y);
+      } else {
+        display = state?.state || "unknown";
+      }
+
+      return `
+        <tr>
+          <td class="ent-name">${this._escapeHtml(name)}</td>
+          <td class="ent-state">
+            <span class="state-pill">${this._escapeHtml(display)}${unit ? " " + this._escapeHtml(unit) : ""}</span>
+          </td>
+        </tr>`;
+    }).join("");
+
+    container.innerHTML = `<table class="entity-list">${rows}</table>`;
   }
 
   // ----------------------------------------------------------
@@ -1344,7 +1411,7 @@ class VibeDashPanel extends HTMLElement {
       if (!body) return;
       if      (card.type === "metric")      body.innerHTML = this._renderMetric(card);
       else if (card.type === "gauge")       body.innerHTML = this._renderGauge(card, i);
-      else if (card.type === "entity_list") body.innerHTML = this._renderEntityList(card);
+      else if (card.type === "entity_list" && !card.time_range) body.innerHTML = this._renderEntityList(card);
     });
   }
 
