@@ -12,8 +12,8 @@ PANEL_TITLE = "VibeDash"
 PANEL_ICON = "mdi:creation"
 PANEL_FRONTEND_PATH = "vibedash_frontend"
 
-# Card types the LLM can generate
-CARD_TYPES = ["chart", "metric", "gauge", "entity_list", "markdown"]
+# Component types the LLM can generate (json-render spec format)
+COMPONENT_TYPES = ["HAChart", "HAMetric", "HAGauge", "HAEntityList", "HAMarkdown"]
 
 # Time ranges supported for charts
 TIME_RANGES = {
