@@ -1,0 +1,17 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Set up VibeDash",
+        "description": "Select the AI Task provider to use for generating dashboards.",
+        "data": {
+          "ai_task_entry": "AI Task Provider"
+        }
+      }
+    },
+    "abort": {
+      "already_configured": "VibeDash is already configured.",
+      "no_ai_task": "No AI Task integrations found. Please set up an AI Task provider first."
+    }
+  }
+}
