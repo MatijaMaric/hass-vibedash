@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+/*
+ * Map Home Assistant CSS custom properties to shadcn/Tailwind theme tokens.
+ * These are set on :host (Shadow DOM root) so they inherit into all components.
+ */
+@theme {
+  --color-background: var(--vd-bg, #0f172a);
+  --color-foreground: var(--vd-text, #f1f5f9);
+  --color-card: var(--vd-surface, #1e293b);
+  --color-card-foreground: var(--vd-text, #f1f5f9);
+  --color-primary: var(--vd-primary, #3b82f6);
+  --color-primary-foreground: #ffffff;
+  --color-muted: var(--vd-surface-2, #334155);
+  --color-muted-foreground: var(--vd-text-muted, #94a3b8);
+  --color-accent: var(--vd-accent, #6366f1);
+  --color-accent-foreground: #ffffff;
+  --color-border: var(--vd-border, rgba(148, 163, 184, 0.15));
+  --color-destructive: var(--vd-error, #ef4444);
+  --color-success: var(--vd-success, #22c55e);
+  --color-warning: var(--vd-warning, #eab308);
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+
+  --color-chart-1: #60a5fa;
+  --color-chart-2: #34d399;
+  --color-chart-3: #fbbf24;
+  --color-chart-4: #f87171;
+  --color-chart-5: #a78bfa;
+  --color-chart-6: #22d3ee;
+  --color-chart-7: #fb923c;
+  --color-chart-8: #f472b6;
+}
+
+/*
+ * Map HA theme variables to VibeDash tokens inside the shadow root.
+ * HA sets --primary-background-color etc on the document; we read them
+ * and expose as --vd-* for the @theme block above.
+ */
+:host {
+  --vd-bg: var(--primary-background-color, #0f172a);
+  --vd-surface: var(--card-background-color, #1e293b);
+  --vd-surface-2: color-mix(in srgb, var(--card-background-color, #1e293b) 80%, white 20%);
+  --vd-text: var(--primary-text-color, #f1f5f9);
+  --vd-text-muted: var(--secondary-text-color, #94a3b8);
+  --vd-text-faint: color-mix(in srgb, var(--secondary-text-color, #94a3b8) 60%, transparent);
+  --vd-primary: var(--primary-color, #3b82f6);
+  --vd-accent: var(--accent-color, #6366f1);
+  --vd-success: var(--success-color, #22c55e);
+  --vd-warning: var(--warning-color, #eab308);
+  --vd-error: var(--error-color, #ef4444);
+  --vd-border: var(--divider-color, rgba(148, 163, 184, 0.15));
+
+  display: block;
+  height: 100%;
+  font-family: var(--paper-font-body1_-_font-family, system-ui, -apple-system, sans-serif);
+  color: var(--vd-text);
+  background: var(--vd-bg);
+}

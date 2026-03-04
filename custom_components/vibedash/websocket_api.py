@@ -33,35 +33,50 @@ Limit to 20 most relevant entities.
 Return ONLY valid JSON, no other text."""
 
 DASHBOARD_GENERATION_PROMPT = """\
-You are a Home Assistant dashboard generator. Create a dashboard layout as JSON \
-based on the user's request and the available entity data.
+You are a Home Assistant dashboard generator using the json-render spec format. \
+Create a dashboard layout as a json-render spec based on the user's request.
 
 {entity_details}
 
-Available card types:
-- "chart": Time-series graph. Fields: type, title, chart_type ("line" or "bar"), \
-entities (array of entity_ids), time_range ("1h", "6h", "24h", "7d", or "30d")
-- "metric": Single big number. Fields: type, title, entity (single entity_id)
-- "gauge": Circular gauge for bounded values. Fields: type, title, \
+Available component types:
+
+HA data components (for displaying Home Assistant data):
+- "HAChart": Time-series chart. Props: title (string), chartType ("line"|"bar"|"area"), \
+entities (array of entity_ids, max 10), timeRange ("1h"|"6h"|"24h"|"7d"|"30d")
+- "HAMetric": Single big number display. Props: title (string), entity (single entity_id)
+- "HAGauge": Semicircle gauge for bounded values. Props: title (string), \
 entity (single entity_id), min (number), max (number)
-- "entity_list": Table of entities. Fields: type, title, \
-entities (array of entity_ids)
-- "markdown": Text/analysis card. Fields: type, title, content (markdown text)
+- "HAEntityList": Table of entities. Props: title (string), \
+entities (array of entity_ids), timeRange (optional, for showing change over time)
+- "HAMarkdown": Text/analysis card. Props: title (string), content (markdown string)
+
+Layout components (for structuring the dashboard):
+- "Grid": Grid container. Props: columns (number, 1-3), gap (number). \
+Children: array of element IDs.
+- "Card": Card container with optional title/description. Props: title (string, optional), \
+description (string, optional). Children: array of element IDs.
+- "Stack": Flex container. Props: direction ("row"|"column"), gap (number). \
+Children: array of element IDs.
+- "Heading": Text heading. Props: text (string), level (1-4).
+- "Text": Body text. Props: text (string).
 
 Rules:
+- Output a json-render spec with "root" and "elements" keys
+- Each element has a unique string ID, a "type", a "props" object, and an optional \
+"children" array of element IDs
+- The root should be a Grid element containing the dashboard cards
 - Only use entity_ids from the selected entities above
-- Choose appropriate card types for the data being shown
-- Use "chart" for trends and history, "metric" for single current values, \
-"gauge" for percentages or bounded ranges (like battery, humidity)
-- Include a "markdown" card with a brief analysis or summary when appropriate
-- For chart entities, prefer grouping related sensors (e.g., all temperatures) \
-in a single chart
-- Create 3-8 cards total for a good dashboard layout
+- Use HAChart for trends/history, HAMetric for single current values, \
+HAGauge for percentages or bounded ranges (battery, humidity)
+- Include an HAMarkdown card with a brief analysis when appropriate
+- For charts, group related sensors in a single HAChart
+- Create 3-8 component elements total for a good dashboard layout
 
 User request: {prompt}
 
 Return ONLY a valid JSON object with this structure:
-{{"title": "Dashboard Title", "cards": [...]}}
+{{"root": "root-id", "elements": {{"root-id": {{"type": "Grid", "props": {{"columns": 2}}, \
+"children": ["id1", "id2"]}}, "id1": {{"type": "HAMetric", "props": {{...}}}}, ...}}}}
 No other text, just the JSON."""
 
 
@@ -96,16 +111,12 @@ async def ws_generate(
     entry = entries[0]
     ai_task_entity = entry.data.get(CONF_AI_TASK_ENTRY)
     if not ai_task_entity:
-        connection.send_error(
-            msg["id"], "no_ai_task", "No AI Task provider configured"
-        )
+        connection.send_error(msg["id"], "no_ai_task", "No AI Task provider configured")
         return
 
     entity_cache = hass.data[DOMAIN].get("entity_cache")
     if not entity_cache:
-        connection.send_error(
-            msg["id"], "no_cache", "Entity cache not initialized"
-        )
+        connection.send_error(msg["id"], "no_cache", "Entity cache not initialized")
         return
 
     try:
@@ -209,13 +220,13 @@ async def ws_history(
 
     try:
         # Use the recorder/history API
-        from homeassistant.components.recorder import get_instance, history
+        from homeassistant.components.recorder import get_instance
 
         history_data = await get_instance(hass).async_add_executor_job(
             _get_history, hass, start_time, end_time, entity_ids
         )
 
-        # Format for Chart.js
+        # Format for Recharts (t/y pairs per entity)
         formatted: dict[str, list[dict[str, Any]]] = {}
         for entity_id, states in history_data.items():
             points = []
@@ -282,9 +293,7 @@ def ws_entities(
     """Return cached entity catalog."""
     entity_cache = hass.data[DOMAIN].get("entity_cache")
     if not entity_cache:
-        connection.send_error(
-            msg["id"], "no_cache", "Entity cache not initialized"
-        )
+        connection.send_error(msg["id"], "no_cache", "Entity cache not initialized")
         return
 
     cache = entity_cache.cache
@@ -321,11 +330,11 @@ def _parse_entity_ids(data: Any) -> list[str]:
 
 
 def _parse_dashboard(data: Any) -> dict[str, Any] | None:
-    """Parse dashboard JSON from LLM response."""
+    """Parse dashboard spec (json-render format) from LLM response."""
     text = str(data) if not isinstance(data, str) else data
 
     json_obj = _extract_json(text)
-    if json_obj and "cards" in json_obj:
+    if json_obj and "root" in json_obj and "elements" in json_obj:
         return json_obj
 
     return None
@@ -371,21 +380,30 @@ def _extract_json(text: str) -> dict[str, Any] | None:
 def _validate_dashboard_entities(
     hass: HomeAssistant, dashboard: dict[str, Any]
 ) -> None:
-    """Remove references to entities that don't exist."""
-    for card in dashboard.get("cards", []):
-        card_type = card.get("type")
+    """Remove references to entities that don't exist from json-render spec."""
+    elements_to_remove: list[str] = []
 
-        if card_type in ("chart", "entity_list"):
-            entities = card.get("entities", [])
-            card["entities"] = [
+    for elem_id, elem in dashboard.get("elements", {}).items():
+        props = elem.get("props", {})
+        elem_type = elem.get("type", "")
+
+        if elem_type in ("HAChart", "HAEntityList"):
+            entities = props.get("entities", [])
+            props["entities"] = [
                 eid for eid in entities if hass.states.get(eid) is not None
             ]
-        elif card_type in ("metric", "gauge"):
-            entity = card.get("entity")
-            if entity and hass.states.get(entity) is None:
-                card["_invalid"] = True
+            if not props["entities"]:
+                elements_to_remove.append(elem_id)
 
-    # Remove invalid cards
-    dashboard["cards"] = [
-        c for c in dashboard.get("cards", []) if not c.get("_invalid")
-    ]
+        elif elem_type in ("HAMetric", "HAGauge"):
+            entity = props.get("entity")
+            if entity and hass.states.get(entity) is None:
+                elements_to_remove.append(elem_id)
+
+    # Remove invalid elements and their references from parent children arrays
+    for elem_id in elements_to_remove:
+        dashboard["elements"].pop(elem_id, None)
+        for elem in dashboard["elements"].values():
+            children = elem.get("children", [])
+            if elem_id in children:
+                children.remove(elem_id)
