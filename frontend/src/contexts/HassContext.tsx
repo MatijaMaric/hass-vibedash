@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useMemo,
   useRef,
   useSyncExternalStore,
   type ReactNode,
@@ -72,7 +73,10 @@ export function HassProvider({ hass, children }: HassProviderProps) {
     [],
   );
 
-  const value: HassContextValue = { getHass, callWS, subscribe };
+  const value = useMemo<HassContextValue>(
+    () => ({ getHass, callWS, subscribe }),
+    [getHass, callWS, subscribe],
+  );
 
   return <HassContext.Provider value={value}>{children}</HassContext.Provider>;
 }
