@@ -80,6 +80,20 @@ const haComponentDefinitions = {
     description:
       "Markdown text card for analysis, summaries, or explanatory text about dashboard data.",
   },
+
+  HAMiniGraph: {
+    props: z.object({
+      title: z.string().describe("Card title"),
+      entity: z.string().describe("Single Home Assistant entity_id"),
+      timeRange: z
+        .enum(["1h", "6h", "24h", "7d", "30d"])
+        .default("24h")
+        .describe("Time range for sparkline history"),
+    }),
+    slots: [] as string[],
+    description:
+      "Compact card showing current value with a small sparkline trend below. The default choice for individual sensor entities (temperature, humidity, power, energy).",
+  },
 } as const;
 
 /**

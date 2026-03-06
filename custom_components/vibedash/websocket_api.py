@@ -24,59 +24,77 @@ select the most relevant entities from the available list.
 
 User request: {prompt}
 
+Guidelines:
+- Select entities that would be useful for creating a rich dashboard visualization
+- Include entities from diverse categories (climate, power, sensors, batteries, etc.) \
+for a well-rounded dashboard
+- If the request mentions a room/area, select all relevant entities for that area
+- Prefer entities that have numeric states (sensors) over binary or text entities
+- Include related entities (e.g., if selecting a temperature sensor, also include \
+the humidity sensor from the same device/area)
+- Limit to 30 most relevant entities
+
 Return a JSON object with a single key "entity_ids" containing an array of \
-entity_id strings that are most relevant to the user's request. \
-Only include entities from the available list above. \
-Select entities that would be useful for creating a dashboard visualization. \
-Limit to 20 most relevant entities.
+entity_id strings. Only include entities from the available list above.
 
 Return ONLY valid JSON, no other text."""
 
 DASHBOARD_GENERATION_PROMPT = """\
-You are a Home Assistant dashboard generator using the json-render spec format. \
-Create a dashboard layout as a json-render spec based on the user's request.
+You are a Home Assistant dashboard generator. Create a well-organized dashboard \
+layout as a json-render spec based on the user's request.
 
 {entity_details}
 
 Available component types:
 
-HA data components (for displaying Home Assistant data):
-- "HAChart": Time-series chart. Props: title (string), chartType ("line"|"bar"|"area"), \
-entities (array of entity_ids, max 10), timeRange ("1h"|"6h"|"24h"|"7d"|"30d")
-- "HAMetric": Single big number display. Props: title (string), entity (single entity_id)
-- "HAGauge": Semicircle gauge for bounded values. Props: title (string), \
-entity (single entity_id), min (number), max (number)
-- "HAEntityList": Table of entities. Props: title (string), \
-entities (array of entity_ids), timeRange (optional, for showing change over time)
-- "HAMarkdown": Text/analysis card. Props: title (string), content (markdown string)
+HA data components:
+- "HAMiniGraph": Compact card with current value + sparkline trend. \
+Props: title (string), entity (single entity_id), \
+timeRange ("1h"|"6h"|"24h"|"7d"|"30d", default "24h"). \
+THIS IS THE DEFAULT CARD for individual sensors (temperature, humidity, power, energy, etc.)
+- "HAChart": Full time-series chart for comparing multiple entities on one axis. \
+Props: title (string), chartType ("line"|"bar"|"area"), \
+entities (array of entity_ids, max 10), timeRange ("1h"|"6h"|"24h"|"7d"|"30d"). \
+Use ONLY when comparing 2+ related entities together.
+- "HAMetric": Single big number without trend. Props: title (string), entity (single entity_id). \
+Use for non-numeric or rarely changing values, or when sparkline is not useful.
+- "HAGauge": Semicircle gauge. Props: title (string), entity (single entity_id), \
+min (number), max (number). Use for bounded percentages (battery, humidity).
+- "HAEntityList": Compact list of entities. Props: title (string), \
+entities (array of entity_ids), timeRange (optional). \
+Use for batteries or groups of similar simple entities.
+- "HAMarkdown": Text/analysis card. Props: title (string), content (markdown string).
 
-Layout components (for structuring the dashboard):
-- "Grid": Grid container. Props: columns (number, 1-3), gap (number). \
+Layout components:
+- "Grid": Grid container. Props: columns (number, 1-4), gap (number). \
 Children: array of element IDs.
-- "Card": Card container with optional title/description. Props: title (string, optional), \
-description (string, optional). Children: array of element IDs.
+- "Card": Card wrapper. Props: title (string, optional). Children: array of element IDs.
 - "Stack": Flex container. Props: direction ("row"|"column"), gap (number). \
 Children: array of element IDs.
-- "Heading": Text heading. Props: text (string), level (1-4).
+- "Heading": Section heading. Props: text (string), level (1-4).
 - "Text": Body text. Props: text (string).
 
-Rules:
-- Output a json-render spec with "root" and "elements" keys
-- Each element has a unique string ID, a "type", a "props" object, and an optional \
-"children" array of element IDs
-- The root should be a Grid element containing the dashboard cards
-- Only use entity_ids from the selected entities above
-- Use HAChart for trends/history, HAMetric for single current values, \
-HAGauge for percentages or bounded ranges (battery, humidity)
-- Include an HAMarkdown card with a brief analysis when appropriate
-- For charts, group related sensors in a single HAChart
-- Create 3-8 component elements total for a good dashboard layout
+Dashboard design rules:
+1. GROUP entities by category with Heading elements (e.g., "Climate", "Power", \
+"Sensors", "Batteries"). Each section gets a level-2 Heading followed by its cards.
+2. Use a NESTED layout: root Grid (1 column) → sections, where each section is a \
+Stack(direction="column") containing a Heading + Grid of cards for that category.
+3. Put HAMiniGraph cards in 2-column Grids within sections for compact layout.
+4. HAMiniGraph is the DEFAULT for individual sensor entities. Use it for temperature, \
+humidity, power, energy, illuminance, pressure, CO2, TVOC, voltage, current, etc.
+5. Use HAChart ONLY when overlaying 2+ related entities (e.g., indoor vs outdoor temp, \
+or production vs consumption).
+6. Use HAEntityList for batteries (group all battery sensors into one list).
+7. Use HAGauge for single bounded percentages when visual emphasis is needed.
+8. Use HAMarkdown sparingly — only for a brief summary if the user's request implies analysis.
+9. Create 10-25 total elements for a rich, informative dashboard.
+10. Give each card a short, clear title (e.g., "Living Room Temperature", not \
+"Temperature Sensor for the Living Room Area").
 
 User request: {prompt}
 
-Return ONLY a valid JSON object with this structure:
-{{"root": "root-id", "elements": {{"root-id": {{"type": "Grid", "props": {{"columns": 2}}, \
-"children": ["id1", "id2"]}}, "id1": {{"type": "HAMetric", "props": {{...}}}}, ...}}}}
+Return ONLY a valid JSON object with "root" and "elements" keys. \
+Each element has a unique string ID, "type", "props", and optional "children" array.
 No other text, just the JSON."""
 
 
@@ -404,7 +422,7 @@ def _validate_dashboard_entities(
             if not props["entities"]:
                 elements_to_remove.append(elem_id)
 
-        elif elem_type in ("HAMetric", "HAGauge"):
+        elif elem_type in ("HAMetric", "HAGauge", "HAMiniGraph"):
             entity = props.get("entity")
             if entity and hass.states.get(entity) is None:
                 elements_to_remove.append(elem_id)
