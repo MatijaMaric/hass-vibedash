@@ -142,7 +142,7 @@ export function EmptyState({
           <button
             key={suggestion}
             onClick={() => onSuggestionClick(suggestion)}
-            className="cursor-pointer rounded-lg border border-border bg-card p-3 text-left text-sm text-foreground transition-colors hover:bg-muted"
+            className="cursor-pointer rounded-xl bg-card p-3 text-left text-sm text-foreground transition-colors hover:bg-muted"
           >
             {suggestion}
           </button>
