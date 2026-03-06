@@ -148,6 +148,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   stroke={CHART_COLORS[i % CHART_COLORS.length]}
                   fill={CHART_COLORS[i % CHART_COLORS.length]}
                   fillOpacity={0.15}
+                  connectNulls
                   isAnimationActive={false}
                 />
               ))}
@@ -188,6 +189,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   stroke={CHART_COLORS[i % CHART_COLORS.length]}
                   dot={false}
                   strokeWidth={2}
+                  connectNulls
                   isAnimationActive={false}
                 />
               ))}

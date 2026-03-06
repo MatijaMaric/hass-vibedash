@@ -58,6 +58,9 @@ export function useHistory(
  * Transform the HA history response into Recharts-friendly format.
  * Input:  { "sensor.temp": [{t: "...", y: 22}, ...], ... }
  * Output: [{ time: "...", "sensor.temp": 22, ... }, ...]
+ *
+ * Each entity's last known value is forward-filled to all subsequent
+ * timestamps so Recharts renders contiguous lines instead of gaps.
  */
 function transformHistory(
   history: Record<string, Array<{ t: string; y: number }>>,
@@ -77,7 +80,27 @@ function transformHistory(
   }
 
   // Sort by time
-  return Array.from(timeMap.values()).sort((a, b) =>
+  const sorted = Array.from(timeMap.values()).sort((a, b) =>
     a.time.localeCompare(b.time),
   );
+
+  // Forward-fill: carry each entity's last known value forward so that
+  // timestamps where it didn't change still have a value (HA only records
+  // state changes, so the last state persists until the next change).
+  const lastKnown: Record<string, number | null> = {};
+  for (const entityId of entityIds) {
+    lastKnown[entityId] = null;
+  }
+  for (const point of sorted) {
+    for (const entityId of entityIds) {
+      const val = point[entityId];
+      if (val !== undefined && val !== null) {
+        lastKnown[entityId] = val as number;
+      } else if (lastKnown[entityId] !== null) {
+        point[entityId] = lastKnown[entityId];
+      }
+    }
+  }
+
+  return sorted;
 }
