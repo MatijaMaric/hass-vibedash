@@ -187,7 +187,7 @@ catch {
 
 Write-Info-Message "💾 Creating commit..."
 try {
-    $CommitMessage = "Release v$NewVersion"
+    $CommitMessage = "chore: bump version to $NewVersion"
     git commit -m $CommitMessage
     Write-Success-Message "✓ Commit created: $CommitMessage"
 }
