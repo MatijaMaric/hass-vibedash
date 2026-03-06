@@ -40,10 +40,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Register WebSocket API commands
     async_register_commands(hass)
 
-    # Register frontend panel
+    # Register frontend panel — remove any leftover registration first to allow
+    # clean re-setup after a failed unload.
+    panel_url_path = PANEL_URL.lstrip("/")
+    if panel_url_path in hass.data.get("frontend_panels", {}):
+        frontend.async_remove_panel(hass, panel_url_path)
+
     frontend_path = str(FRONTEND_DIR)
     await hass.http.async_register_static_paths(
-        [StaticPathConfig(f"/{PANEL_FRONTEND_PATH}", frontend_path, cache_headers=False)]
+        [
+            StaticPathConfig(
+                f"/{PANEL_FRONTEND_PATH}", frontend_path, cache_headers=False
+            )
+        ]
     )
 
     frontend.async_register_built_in_panel(
@@ -51,7 +60,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         component_name="custom",
         sidebar_title=PANEL_TITLE,
         sidebar_icon=PANEL_ICON,
-        frontend_url_path=PANEL_URL.lstrip("/"),
+        frontend_url_path=panel_url_path,
         config={
             "_panel_custom": {
                 "name": "vibedash-panel",
@@ -74,7 +83,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         entity_cache.cleanup()
 
     # Remove panel
-    frontend.async_remove_panel(PANEL_URL.lstrip("/"))
+    frontend.async_remove_panel(hass, PANEL_URL.lstrip("/"))
 
     hass.data.pop(DOMAIN, None)
     return True
