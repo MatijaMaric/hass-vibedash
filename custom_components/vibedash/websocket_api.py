@@ -126,6 +126,95 @@ Return ONLY a valid JSON object with "root" and "elements" keys. \
 Each element has a unique string ID, "type", "props", and optional "children" array.
 No other text, just the JSON."""
 
+DASHBOARD_GENERATION_STREAMING_PROMPT = """\
+You are a Home Assistant dashboard generator. Create a visually rich, \
+multi-column dashboard layout using the SpecStream format (JSONL patches) \
+based on the user's request.
+
+{entity_details}
+
+Available component types:
+
+Data components:
+- "HAMiniGraph": Compact card with current value + sparkline trend. \
+Props: title (string), entity (single entity_id), \
+timeRange ("1h"|"6h"|"24h"|"7d"|"30d", default "24h"). \
+DEFAULT card for individual sensors (temperature, humidity, power, energy, etc.)
+- "HAChart": Full time-series chart for comparing multiple entities on one axis. \
+Props: title (string), chartType ("line"|"bar"|"area"), \
+entities (array of entity_ids, max 10), timeRange ("1h"|"6h"|"24h"|"7d"|"30d"). \
+Use ONLY when comparing 2+ related entities together.
+- "HAMetric": Single big number without trend. Props: title (string), entity (single entity_id). \
+Use for non-numeric or rarely changing values.
+- "HAGauge": Semicircle gauge. Props: title (string), entity (single entity_id), \
+min (number), max (number). Use for bounded percentages (battery, humidity).
+- "HAEntityList": Compact list of entities. Props: title (string), \
+entities (array of entity_ids), timeRange (optional). \
+Use for groups of similar entities (batteries, lights, doors).
+- "HAMarkdown": Text/analysis card. Props: title (string), content (markdown string).
+
+Layout components:
+- "Grid": CSS grid container. Props: columns (number, 1-6), gap ("sm"|"md"|"lg"). \
+Children: array of element IDs.
+- "GridItem": Column-span wrapper for Grid children. Props: span (number, 1-6). \
+Children: array of element IDs. Use inside Grid to make a child span multiple columns. \
+Example: in a 3-column Grid, span=3 for full-width, span=2 for two-thirds width.
+- "Masonry": Masonry layout where cards of different heights pack tightly (Pinterest-style). \
+Props: columns (number, 2-4), gap ("sm"|"md"|"lg"). \
+Children: array of element IDs (placed directly, no GridItem needed). \
+Best for overview dashboards with many mixed-height cards.
+- "Stack": Flex container. Props: direction ("horizontal"|"vertical"), \
+gap ("none"|"sm"|"md"|"lg"). Children: array of element IDs.
+- "Card": Card wrapper. Props: title (string, optional). Children: array of element IDs.
+- "Heading": Section heading. Props: text (string), level (1-4).
+- "Text": Body text. Props: text (string).
+
+Layout strategy — choose the best approach for the content:
+
+GRID + GRIDITEM (structured layouts with emphasis):
+Use when you want precise control over card widths. Place cards in a Grid (typically \
+columns=3 or columns=4) and wrap each child in GridItem with the appropriate span. \
+Wide cards like HAChart or HAEntityList get span=2 or span=3. \
+Compact cards like HAMiniGraph, HAMetric, HAGauge get span=1.
+
+MASONRY (dense overview layouts):
+Use when you have many cards of different heights and want them to pack tightly. \
+Place cards directly as children of Masonry — no GridItem needed. \
+Best for "show me everything" dashboards with lots of sensors.
+
+MIX BOTH: Use Grid+GridItem for a hero section at the top (e.g., a full-width chart), \
+then Masonry for the detail cards below.
+
+Layout rules:
+1. The ROOT element must be a Stack with direction="vertical" and gap="lg".
+2. Group entities by category with level-2 Heading elements.
+3. After each Heading, place cards in a Grid or Masonry layout.
+4. VARY card sizes to create visual hierarchy — important data gets more space \
+(e.g., a key chart at span=3 in a 3-column grid, while metrics are span=1).
+5. HAMiniGraph is the DEFAULT for individual sensor entities.
+6. Use HAChart ONLY for comparing 2+ related entities on one axis.
+7. Use HAEntityList for groups of similar entities (batteries, lights).
+8. Use HAGauge for bounded percentages when visual emphasis is needed.
+9. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
+10. Create 10-30 total elements for a rich, informative dashboard.
+11. Give each card a short, clear title (e.g., "Living Room Temp").
+
+User request: {prompt}
+
+OUTPUT FORMAT — SpecStream (JSONL patches):
+Output one JSON patch operation per line. Each line is a JSON object with \
+"op", "path", and "value" keys. Use "add" operations to build the spec.
+
+Start with the root:
+{{"op":"add","path":"/root","value":"<root_element_id>"}}
+{{"op":"add","path":"/elements","value":{{}}}}
+
+Then add each element one per line:
+{{"op":"add","path":"/elements/<element_id>","value":{{"type":"<Type>","props":{{...}},"children":[...]}}}}
+
+Output ONLY the JSONL patch lines, one per line, no other text. \
+Do not wrap in code fences. Each line must be valid JSON."""
+
 
 def _get_streaming_config(hass: HomeAssistant) -> dict[str, Any] | None:
     """Get streaming provider config if configured.
@@ -415,6 +504,12 @@ async def ws_generate_stream(
         )
 
         if streaming_config:
+            # Use SpecStream prompt for streaming path
+            streaming_prompt = DASHBOARD_GENERATION_STREAMING_PROMPT.format(
+                entity_details=entity_details,
+                prompt=prompt,
+            )
+
             # Stream the dashboard generation
             connection.send_message(
                 websocket_api.event_message(
@@ -434,7 +529,7 @@ async def ws_generate_stream(
             async for chunk in stream_llm_response(
                 provider=streaming_config["provider"],
                 api_key=streaming_config["api_key"],
-                prompt=dashboard_prompt,
+                prompt=streaming_prompt,
                 model=streaming_config.get("model"),
                 base_url=streaming_config.get("base_url"),
             ):
@@ -445,13 +540,15 @@ async def ws_generate_stream(
                         {
                             "stage": "streaming",
                             "chunk": chunk,
-                            "accumulated": accumulated,
                         },
                     )
                 )
 
-            # Parse the final accumulated response
-            dashboard = _parse_dashboard(accumulated)
+            # Parse the SpecStream JSONL into a dashboard spec
+            dashboard = _parse_specstream_dashboard(accumulated)
+            if not dashboard:
+                # Fallback: try parsing as regular JSON in case LLM ignored format
+                dashboard = _parse_dashboard(accumulated)
 
         else:
             # Non-streaming fallback via ai_task
@@ -645,6 +742,54 @@ def _parse_entity_ids(data: Any) -> list[str]:
     import re
 
     return re.findall(r"[a-z_]+\.[a-z0-9_]+", text)
+
+
+def _parse_specstream_dashboard(data: Any) -> dict[str, Any] | None:
+    """Parse SpecStream JSONL patches into a dashboard spec.
+
+    Each line is an RFC 6902 JSON Patch "add" operation like:
+      {"op":"add","path":"/root","value":"stack_main"}
+      {"op":"add","path":"/elements/heading_1","value":{"type":"Heading",...}}
+    """
+    text = str(data) if not isinstance(data, str) else data
+
+    # Strip markdown fences if present
+    text = text.strip()
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines)
+
+    result: dict[str, Any] = {}
+    for line in text.split("\n"):
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            patch = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        if patch.get("op") != "add" or "path" not in patch or "value" not in patch:
+            continue
+
+        path_str = patch["path"].lstrip("/")
+        if not path_str:
+            continue
+
+        parts = path_str.split("/")
+        obj = result
+        for part in parts[:-1]:
+            if part not in obj:
+                obj[part] = {}
+            obj = obj[part]
+        obj[parts[-1]] = patch["value"]
+
+    if "root" in result and "elements" in result:
+        return result
+    return None
 
 
 def _parse_dashboard(data: Any) -> dict[str, Any] | None:
