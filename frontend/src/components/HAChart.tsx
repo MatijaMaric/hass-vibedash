@@ -8,7 +8,6 @@ import {
   Area,
   XAxis,
   YAxis,
-  CartesianGrid,
   Tooltip,
   Legend,
   ResponsiveContainer,
@@ -57,7 +56,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="rounded-xl bg-card p-4">
       <h3 className="mb-3 text-sm font-medium text-foreground">{title}</h3>
 
       {loading && (
@@ -76,26 +75,21 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
         <ResponsiveContainer width="100%" height={220}>
           {chartType === "bar" ? (
             <BarChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--color-border)"
-                opacity={0.3}
-              />
               <XAxis
                 dataKey="time"
                 tickFormatter={formatTime}
                 tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                stroke="var(--color-border)"
+                stroke="none"
               />
               <YAxis
                 tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                stroke="var(--color-border)"
+                stroke="none"
               />
               <Tooltip
                 contentStyle={{
                   background: "var(--color-card)",
                   border: "1px solid var(--color-border)",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   color: "var(--color-foreground)",
                 }}
                 labelFormatter={formatTime}
@@ -114,26 +108,21 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
             </BarChart>
           ) : chartType === "area" ? (
             <AreaChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--color-border)"
-                opacity={0.3}
-              />
               <XAxis
                 dataKey="time"
                 tickFormatter={formatTime}
                 tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                stroke="var(--color-border)"
+                stroke="none"
               />
               <YAxis
                 tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                stroke="var(--color-border)"
+                stroke="none"
               />
               <Tooltip
                 contentStyle={{
                   background: "var(--color-card)",
                   border: "1px solid var(--color-border)",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   color: "var(--color-foreground)",
                 }}
                 labelFormatter={formatTime}
@@ -155,26 +144,21 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
             </AreaChart>
           ) : (
             <LineChart data={data}>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="var(--color-border)"
-                opacity={0.3}
-              />
               <XAxis
                 dataKey="time"
                 tickFormatter={formatTime}
                 tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                stroke="var(--color-border)"
+                stroke="none"
               />
               <YAxis
                 tick={{ fontSize: 10, fill: "var(--color-muted-foreground)" }}
-                stroke="var(--color-border)"
+                stroke="none"
               />
               <Tooltip
                 contentStyle={{
                   background: "var(--color-card)",
                   border: "1px solid var(--color-border)",
-                  borderRadius: 8,
+                  borderRadius: 12,
                   color: "var(--color-foreground)",
                 }}
                 labelFormatter={formatTime}

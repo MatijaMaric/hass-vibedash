@@ -162,7 +162,7 @@ export function App() {
       <main className="flex flex-1 flex-col overflow-y-auto">
         {error && (
           <div className="mx-auto max-w-screen-xl px-4 pt-4">
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <div className="flex items-center gap-2 rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
               <svg
                 className="h-4 w-4 shrink-0"
                 viewBox="0 0 24 24"
@@ -197,7 +197,7 @@ export function App() {
         {showFullLoading && <LoadingState message={progressMessage} />}
 
         {displaySpec && (
-          <div className="mx-auto max-w-screen-xl px-6 py-6">
+          <div className="mx-auto max-w-screen-2xl px-6 py-6">
             {isStreaming && <StreamingIndicator />}
             <JSONUIProvider registry={registry}>
               <Renderer spec={displaySpec} registry={registry} />

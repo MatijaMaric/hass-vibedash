@@ -68,21 +68,11 @@ export function HAEntityList({
   }
 
   return (
-    <div className="rounded-lg border border-border bg-card p-4">
+    <div className="rounded-xl bg-card p-4">
       <h3 className="mb-3 text-sm font-medium text-muted-foreground">
         {title}
       </h3>
       <table className="w-full">
-        <thead>
-          <tr className="border-b border-border">
-            <th className="pb-2 text-left text-xs font-medium text-muted-foreground">
-              Entity
-            </th>
-            <th className="pb-2 text-right text-xs font-medium text-muted-foreground">
-              {timeRange ? "Change" : "State"}
-            </th>
-          </tr>
-        </thead>
         <tbody>
           {entities.map((entityId) => (
             <EntityRow
