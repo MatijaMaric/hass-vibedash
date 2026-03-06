@@ -127,7 +127,10 @@ async def ws_generate(
         return
 
     entry = entries[0]
-    ai_task_entity = entry.data.get(CONF_AI_TASK_ENTRY)
+    # options takes precedence over data so users can switch providers via the options flow
+    ai_task_entity = entry.options.get(CONF_AI_TASK_ENTRY) or entry.data.get(
+        CONF_AI_TASK_ENTRY
+    )
     if not ai_task_entity:
         connection.send_error(msg["id"], "no_ai_task", "No AI Task provider configured")
         return
