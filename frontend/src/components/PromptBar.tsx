@@ -152,7 +152,11 @@ export function EmptyState({
   );
 }
 
-export function LoadingState() {
+interface LoadingStateProps {
+  message?: string | null;
+}
+
+export function LoadingState({ message }: LoadingStateProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16">
       <div className="mb-4 flex gap-1">
@@ -165,7 +169,7 @@ export function LoadingState() {
         ))}
       </div>
       <p className="text-sm text-muted-foreground">
-        Generating your dashboard...
+        {message || "Generating your dashboard..."}
       </p>
     </div>
   );

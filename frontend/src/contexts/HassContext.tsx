@@ -12,6 +12,12 @@ import {
 export interface HassObject {
   states: Record<string, HassState>;
   callWS: <T = unknown>(msg: Record<string, unknown>) => Promise<T>;
+  connection: {
+    subscribeMessage: <T = unknown>(
+      callback: (msg: T) => void,
+      subscribeMsg: Record<string, unknown>,
+    ) => Promise<() => void>;
+  };
   [key: string]: unknown;
 }
 
@@ -28,6 +34,11 @@ interface HassContextValue {
   getHass: () => HassObject;
   /** Call a WebSocket command on HA. */
   callWS: <T = unknown>(msg: Record<string, unknown>) => Promise<T>;
+  /** Subscribe to WS messages (for streaming). Returns unsubscribe function. */
+  subscribeMessage: <T = unknown>(
+    callback: (msg: T) => void,
+    subscribeMsg: Record<string, unknown>,
+  ) => Promise<() => void>;
   /** Subscribe to hass changes. Returns unsubscribe function. */
   subscribe: (cb: () => void) => () => void;
 }
@@ -73,9 +84,17 @@ export function HassProvider({ hass, children }: HassProviderProps) {
     [],
   );
 
+  const subscribeMessage = useCallback(
+    <T = unknown,>(
+      callback: (msg: T) => void,
+      subscribeMsg: Record<string, unknown>,
+    ) => hassRef.current.connection.subscribeMessage<T>(callback, subscribeMsg),
+    [],
+  );
+
   const value = useMemo<HassContextValue>(
-    () => ({ getHass, callWS, subscribe }),
-    [getHass, callWS, subscribe],
+    () => ({ getHass, callWS, subscribeMessage, subscribe }),
+    [getHass, callWS, subscribeMessage, subscribe],
   );
 
   return <HassContext.Provider value={value}>{children}</HassContext.Provider>;

@@ -24,3 +24,9 @@ export function useCallWS() {
   const { callWS } = useHassContext();
   return callWS;
 }
+
+/** Subscribe to WebSocket messages (for streaming). */
+export function useSubscribeMessage() {
+  const { subscribeMessage } = useHassContext();
+  return subscribeMessage;
+}
