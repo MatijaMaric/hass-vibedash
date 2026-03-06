@@ -28,21 +28,64 @@ _LOGGER = logging.getLogger(__name__)
 # Keywords that map to entity domains/device_classes for pre-filtering
 DOMAIN_KEYWORDS: dict[str, list[str]] = {
     "sensor": [
-        "temperature", "humidity", "pressure", "energy", "power", "battery",
-        "illuminance", "light level", "co2", "carbon", "voltage", "current",
-        "speed", "wind", "rain", "moisture", "gas", "pm2.5", "pm10",
-        "sensor", "reading", "measurement", "level", "usage", "consumption",
+        "temperature",
+        "humidity",
+        "pressure",
+        "energy",
+        "power",
+        "battery",
+        "illuminance",
+        "light level",
+        "co2",
+        "carbon",
+        "voltage",
+        "current",
+        "speed",
+        "wind",
+        "rain",
+        "moisture",
+        "gas",
+        "pm2.5",
+        "pm10",
+        "sensor",
+        "reading",
+        "measurement",
+        "level",
+        "usage",
+        "consumption",
     ],
     "binary_sensor": [
-        "door", "window", "motion", "occupancy", "smoke", "leak", "water",
-        "presence", "opening", "contact", "vibration", "tamper", "problem",
-        "binary", "open", "closed", "detected", "on", "off",
+        "door",
+        "window",
+        "motion",
+        "occupancy",
+        "smoke",
+        "leak",
+        "water",
+        "presence",
+        "opening",
+        "contact",
+        "vibration",
+        "tamper",
+        "problem",
+        "binary",
+        "open",
+        "closed",
+        "detected",
+        "on",
+        "off",
     ],
     "light": ["light", "lamp", "bulb", "brightness", "color", "lighting"],
     "switch": ["switch", "plug", "outlet", "toggle"],
     "climate": [
-        "climate", "thermostat", "hvac", "heating", "cooling", "ac",
-        "air conditioning", "temperature control",
+        "climate",
+        "thermostat",
+        "hvac",
+        "heating",
+        "cooling",
+        "ac",
+        "air conditioning",
+        "temperature control",
     ],
     "cover": ["cover", "blind", "curtain", "shutter", "garage", "door"],
     "media_player": ["media", "speaker", "tv", "player", "music", "volume"],
@@ -254,22 +297,12 @@ class VibeDashEntityCache:
                 device_class=(
                     entry.device_class
                     or entry.original_device_class
-                    or (
-                        state.attributes.get("device_class")
-                        if state
-                        else None
-                    )
+                    or (state.attributes.get("device_class") if state else None)
                 ),
-                state_class=(
-                    state.attributes.get("state_class") if state else None
-                ),
+                state_class=(state.attributes.get("state_class") if state else None),
                 unit_of_measurement=(
                     entry.unit_of_measurement
-                    or (
-                        state.attributes.get("unit_of_measurement")
-                        if state
-                        else None
-                    )
+                    or (state.attributes.get("unit_of_measurement") if state else None)
                 ),
                 area_name=area_name,
                 device_name=device_name,
@@ -289,16 +322,12 @@ class VibeDashEntityCache:
         for entity_id, info in self._cache.entities.items():
             self._cache.domains.setdefault(info.domain, []).append(entity_id)
             if info.area_name:
-                self._cache.areas.setdefault(info.area_name, []).append(
-                    entity_id
-                )
+                self._cache.areas.setdefault(info.area_name, []).append(entity_id)
 
     async def _async_save(self) -> None:
         """Save cache to storage."""
         data = {
-            "entities": [
-                info.to_dict() for info in self._cache.entities.values()
-            ],
+            "entities": [info.to_dict() for info in self._cache.entities.values()],
         }
         await self._store.async_save(data)
 
