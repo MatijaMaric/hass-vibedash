@@ -32,7 +32,7 @@ for a well-rounded dashboard
 - Prefer entities that have numeric states (sensors) over binary or text entities
 - Include related entities (e.g., if selecting a temperature sensor, also include \
 the humidity sensor from the same device/area)
-- Limit to 30 most relevant entities
+- Limit to 20 most relevant entities
 
 Return a JSON object with a single key "entity_ids" containing an array of \
 entity_id strings. Only include entities from the available list above.
@@ -87,14 +87,14 @@ or production vs consumption).
 6. Use HAEntityList for batteries (group all battery sensors into one list).
 7. Use HAGauge for single bounded percentages when visual emphasis is needed.
 8. Use HAMarkdown sparingly — only for a brief summary if the user's request implies analysis.
-9. Create 10-25 total elements for a rich, informative dashboard.
+9. Create 6-15 total elements for a focused, informative dashboard.
 10. Give each card a short, clear title (e.g., "Living Room Temperature", not \
 "Temperature Sensor for the Living Room Area").
 
 User request: {prompt}
 
-Return ONLY a valid JSON object with "root" and "elements" keys. \
-Each element has a unique string ID, "type", "props", and optional "children" array.
+Return ONLY a valid minified JSON object (no whitespace) with "root" and "elements" keys. \
+Each element has a unique short string ID, "type", "props", and optional "children" array.
 No other text, just the JSON."""
 
 
@@ -209,11 +209,19 @@ async def ws_generate(
 
         connection.send_result(msg["id"], {"dashboard": dashboard})
 
-    except Exception:
+    except Exception as err:
         _LOGGER.exception("Error generating dashboard")
-        connection.send_error(
-            msg["id"], "generation_error", "Failed to generate dashboard"
-        )
+        err_msg = str(err)
+        if "max output tokens" in err_msg or "incomplete" in err_msg.lower():
+            connection.send_error(
+                msg["id"],
+                "generation_error",
+                "Dashboard too large to generate — try a more specific prompt or fewer entities",
+            )
+        else:
+            connection.send_error(
+                msg["id"], "generation_error", "Failed to generate dashboard"
+            )
 
 
 @websocket_api.websocket_command(
