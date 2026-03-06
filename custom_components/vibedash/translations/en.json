@@ -7,11 +7,24 @@
         "data": {
           "ai_task_entry": "AI Task Provider"
         }
+      },
+      "streaming": {
+        "title": "Streaming (Optional)",
+        "description": "Optionally configure a direct LLM connection for real-time streaming responses. If skipped, VibeDash uses the AI Task provider above (non-streaming).",
+        "data": {
+          "streaming_provider": "Streaming Provider",
+          "streaming_api_key": "API Key",
+          "streaming_model": "Model",
+          "streaming_base_url": "API Base URL"
+        }
       }
     },
     "abort": {
       "already_configured": "VibeDash is already configured.",
       "no_ai_task": "No AI Task integrations found. Please set up an AI Task provider first."
+    },
+    "error": {
+      "streaming_validation_failed": "Could not connect to streaming provider: {error_detail}"
     }
   },
   "options": {
@@ -21,6 +34,16 @@
         "description": "Change the AI Task provider used for generating dashboards.",
         "data": {
           "ai_task_entry": "AI Task Provider"
+        }
+      },
+      "streaming": {
+        "title": "Streaming Configuration",
+        "description": "Configure a direct LLM connection for real-time streaming responses. Select 'None' to disable streaming and use the AI Task provider instead.",
+        "data": {
+          "streaming_provider": "Streaming Provider",
+          "streaming_api_key": "API Key",
+          "streaming_model": "Model",
+          "streaming_base_url": "API Base URL"
         }
       }
     }

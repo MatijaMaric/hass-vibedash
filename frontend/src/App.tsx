@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react";
 import { Renderer, JSONUIProvider } from "@json-render/react";
 import { registry } from "./registry";
-import { useCallWS } from "./hooks/useHass";
+import { useCallWS, useSubscribeMessage } from "./hooks/useHass";
 import { PromptBar, EmptyState, LoadingState } from "./components/PromptBar";
 
 interface DashboardSpec {
@@ -9,44 +9,112 @@ interface DashboardSpec {
   elements: Record<string, unknown>;
 }
 
-interface GenerateResult {
-  dashboard: DashboardSpec;
+interface StreamEvent {
+  stage: "entity_selection" | "dashboard_generation" | "streaming" | "complete";
+  message?: string;
+  entity_count?: number;
+  streaming?: boolean;
+  chunk?: string;
+  accumulated?: string;
+  dashboard?: DashboardSpec;
 }
 
 const MAX_HISTORY = 5;
 
 export function App() {
   const callWS = useCallWS();
+  const subscribeMessage = useSubscribeMessage();
   const [spec, setSpec] = useState<DashboardSpec | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
+  const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
       setLoading(true);
       setError(null);
+      setProgressMessage("Starting...");
+      setStreamingText(null);
 
       try {
-        const result = await callWS<GenerateResult>({
-          type: "vibedash/generate",
-          prompt,
+        // Try the streaming endpoint first
+        const dashboard = await new Promise<DashboardSpec>((resolve, reject) => {
+          let resolved = false;
+
+          subscribeMessage<StreamEvent>(
+            (event) => {
+              switch (event.stage) {
+                case "entity_selection":
+                  setProgressMessage(
+                    event.message || "Analyzing your request...",
+                  );
+                  break;
+
+                case "dashboard_generation":
+                  setProgressMessage(
+                    event.message || "Generating dashboard...",
+                  );
+                  break;
+
+                case "streaming":
+                  if (event.accumulated) {
+                    setStreamingText(event.accumulated);
+                    setProgressMessage("Generating dashboard...");
+                  }
+                  break;
+
+                case "complete":
+                  if (event.dashboard && !resolved) {
+                    resolved = true;
+                    resolve(event.dashboard);
+                  }
+                  break;
+              }
+            },
+            { type: "vibedash/generate_stream", prompt },
+          ).catch((err: unknown) => {
+            if (!resolved) {
+              resolved = true;
+              reject(err);
+            }
+          });
         });
 
-        setSpec(result.dashboard);
+        setSpec(dashboard);
         setHistory((prev) => {
           const next = [prompt, ...prev.filter((p) => p !== prompt)];
           return next.slice(0, MAX_HISTORY);
         });
       } catch (err: unknown) {
-        const message =
-          err instanceof Error ? err.message : "Failed to generate dashboard";
-        setError(message);
+        // Fall back to non-streaming generate if streaming isn't available
+        try {
+          setProgressMessage("Generating dashboard...");
+          setStreamingText(null);
+          const result = await callWS<{ dashboard: DashboardSpec }>({
+            type: "vibedash/generate",
+            prompt,
+          });
+          setSpec(result.dashboard);
+          setHistory((prev) => {
+            const next = [prompt, ...prev.filter((p) => p !== prompt)];
+            return next.slice(0, MAX_HISTORY);
+          });
+        } catch (fallbackErr: unknown) {
+          const message =
+            fallbackErr instanceof Error
+              ? fallbackErr.message
+              : "Failed to generate dashboard";
+          setError(message);
+        }
       } finally {
         setLoading(false);
+        setProgressMessage(null);
+        setStreamingText(null);
       }
     },
-    [callWS],
+    [callWS, subscribeMessage],
   );
 
   return (
@@ -88,7 +156,12 @@ export function App() {
           </div>
         )}
 
-        {loading && <LoadingState />}
+        {loading && (
+          <LoadingState
+            message={progressMessage}
+            streamingText={streamingText}
+          />
+        )}
 
         {!loading && !spec && !error && (
           <EmptyState onSuggestionClick={handleSubmit} />

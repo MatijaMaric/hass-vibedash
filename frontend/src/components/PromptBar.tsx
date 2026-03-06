@@ -152,7 +152,12 @@ export function EmptyState({
   );
 }
 
-export function LoadingState() {
+interface LoadingStateProps {
+  message?: string | null;
+  streamingText?: string | null;
+}
+
+export function LoadingState({ message, streamingText }: LoadingStateProps) {
   return (
     <div className="flex flex-1 flex-col items-center justify-center px-4 py-16">
       <div className="mb-4 flex gap-1">
@@ -165,8 +170,22 @@ export function LoadingState() {
         ))}
       </div>
       <p className="text-sm text-muted-foreground">
-        Generating your dashboard...
+        {message || "Generating your dashboard..."}
       </p>
+      {streamingText && (
+        <div className="mt-6 w-full max-w-2xl">
+          <div className="max-h-48 overflow-y-auto rounded-lg border border-border bg-card p-4">
+            <pre className="whitespace-pre-wrap break-words text-xs text-muted-foreground">
+              {streamingText.length > 500
+                ? "..." + streamingText.slice(-500)
+                : streamingText}
+            </pre>
+          </div>
+          <p className="mt-2 text-center text-xs text-muted-foreground/60">
+            Streaming response...
+          </p>
+        </div>
+      )}
     </div>
   );
 }

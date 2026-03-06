@@ -12,7 +12,16 @@ import voluptuous as vol
 from homeassistant.components import websocket_api
 from homeassistant.core import HomeAssistant, callback
 
-from .const import CONF_AI_TASK_ENTRY, DOMAIN, TIME_RANGES
+from .const import (
+    CONF_AI_TASK_ENTRY,
+    CONF_STREAMING_API_KEY,
+    CONF_STREAMING_BASE_URL,
+    CONF_STREAMING_MODEL,
+    CONF_STREAMING_PROVIDER,
+    DOMAIN,
+    STREAMING_PROVIDER_NONE,
+    TIME_RANGES,
+)
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -118,11 +127,59 @@ Each element has a unique string ID, "type", "props", and optional "children" ar
 No other text, just the JSON."""
 
 
+def _get_streaming_config(hass: HomeAssistant) -> dict[str, Any] | None:
+    """Get streaming provider config if configured.
+
+    Returns None if streaming is not configured.
+    """
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        return None
+
+    entry = entries[0]
+    data = {**entry.data, **entry.options}
+    provider = data.get(CONF_STREAMING_PROVIDER, STREAMING_PROVIDER_NONE)
+
+    if provider == STREAMING_PROVIDER_NONE:
+        return None
+
+    return {
+        "provider": provider,
+        "api_key": data.get(CONF_STREAMING_API_KEY, ""),
+        "model": data.get(CONF_STREAMING_MODEL),
+        "base_url": data.get(CONF_STREAMING_BASE_URL),
+    }
+
+
 def async_register_commands(hass: HomeAssistant) -> None:
     """Register WebSocket commands."""
     websocket_api.async_register_command(hass, ws_generate)
+    websocket_api.async_register_command(hass, ws_generate_stream)
     websocket_api.async_register_command(hass, ws_history)
     websocket_api.async_register_command(hass, ws_entities)
+    websocket_api.async_register_command(hass, ws_streaming_status)
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/streaming_status",
+    }
+)
+@callback
+def ws_streaming_status(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return whether streaming is configured."""
+    config = _get_streaming_config(hass)
+    connection.send_result(
+        msg["id"],
+        {
+            "streaming_available": config is not None,
+            "provider": config["provider"] if config else None,
+        },
+    )
 
 
 @websocket_api.websocket_command(
@@ -137,13 +194,14 @@ async def ws_generate(
     connection: websocket_api.ActiveConnection,
     msg: dict[str, Any],
 ) -> None:
-    """Handle dashboard generation request (two-pass LLM)."""
+    """Handle dashboard generation request (two-pass LLM) with progress events."""
     prompt = msg["prompt"]
+    msg_id = msg["id"]
 
     # Get the config entry
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
-        connection.send_error(msg["id"], "not_configured", "VibeDash is not configured")
+        connection.send_error(msg_id, "not_configured", "VibeDash is not configured")
         return
 
     entry = entries[0]
@@ -152,15 +210,23 @@ async def ws_generate(
         CONF_AI_TASK_ENTRY
     )
     if not ai_task_entity:
-        connection.send_error(msg["id"], "no_ai_task", "No AI Task provider configured")
+        connection.send_error(msg_id, "no_ai_task", "No AI Task provider configured")
         return
 
     entity_cache = hass.data[DOMAIN].get("entity_cache")
     if not entity_cache:
-        connection.send_error(msg["id"], "no_cache", "Entity cache not initialized")
+        connection.send_error(msg_id, "no_cache", "Entity cache not initialized")
         return
 
     try:
+        # Send progress: starting entity selection
+        connection.send_message(
+            websocket_api.event_message(
+                msg_id,
+                {"stage": "entity_selection", "message": "Analyzing your request..."},
+            )
+        )
+
         # Pass 1: Entity selection
         entity_context = entity_cache.get_entity_selection_context(prompt)
         selection_prompt = ENTITY_SELECTION_PROMPT.format(
@@ -187,13 +253,25 @@ async def ws_generate(
 
         if not entity_ids:
             connection.send_error(
-                msg["id"],
+                msg_id,
                 "no_entities",
                 "LLM could not identify relevant entities for your request",
             )
             return
 
         _LOGGER.debug("Pass 1 selected %d entities: %s", len(entity_ids), entity_ids)
+
+        # Send progress: entities found, starting dashboard generation
+        connection.send_message(
+            websocket_api.event_message(
+                msg_id,
+                {
+                    "stage": "dashboard_generation",
+                    "message": f"Found {len(entity_ids)} relevant entities, generating dashboard...",
+                    "entity_count": len(entity_ids),
+                },
+            )
+        )
 
         # Pass 2: Dashboard generation with detailed entity context
         entity_details = entity_cache.get_detailed_context(entity_ids)
@@ -221,7 +299,7 @@ async def ws_generate(
 
         if not dashboard:
             connection.send_error(
-                msg["id"],
+                msg_id,
                 "parse_error",
                 "Failed to parse dashboard from LLM response",
             )
@@ -230,12 +308,202 @@ async def ws_generate(
         # Validate entity references exist
         _validate_dashboard_entities(hass, dashboard)
 
-        connection.send_result(msg["id"], {"dashboard": dashboard})
+        connection.send_result(msg_id, {"dashboard": dashboard})
 
     except Exception:
         _LOGGER.exception("Error generating dashboard")
         connection.send_error(
-            msg["id"], "generation_error", "Failed to generate dashboard"
+            msg_id, "generation_error", "Failed to generate dashboard"
+        )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/generate_stream",
+        vol.Required("prompt"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_generate_stream(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Handle streaming dashboard generation.
+
+    Uses direct LLM API calls for token-by-token streaming.
+    Falls back to non-streaming ai_task if streaming is not configured.
+
+    Sends events:
+      - {stage: "entity_selection", message: "..."}
+      - {stage: "dashboard_generation", message: "..."}
+      - {stage: "streaming", chunk: "...", accumulated: "..."} (streaming only)
+      - {stage: "complete", dashboard: {...}}
+    """
+    prompt = msg["prompt"]
+    msg_id = msg["id"]
+
+    # Verify config
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        connection.send_error(msg_id, "not_configured", "VibeDash is not configured")
+        return
+
+    entry = entries[0]
+    ai_task_entity = entry.options.get(CONF_AI_TASK_ENTRY) or entry.data.get(
+        CONF_AI_TASK_ENTRY
+    )
+    if not ai_task_entity:
+        connection.send_error(msg_id, "no_ai_task", "No AI Task provider configured")
+        return
+
+    entity_cache = hass.data[DOMAIN].get("entity_cache")
+    if not entity_cache:
+        connection.send_error(msg_id, "no_cache", "Entity cache not initialized")
+        return
+
+    streaming_config = _get_streaming_config(hass)
+
+    try:
+        # --- Pass 1: Entity selection (always non-streaming via ai_task) ---
+        connection.send_message(
+            websocket_api.event_message(
+                msg_id,
+                {"stage": "entity_selection", "message": "Analyzing your request..."},
+            )
+        )
+
+        entity_context = entity_cache.get_entity_selection_context(prompt)
+        selection_prompt = ENTITY_SELECTION_PROMPT.format(
+            entity_context=entity_context,
+            prompt=prompt,
+        )
+
+        _LOGGER.debug("Stream pass 1: Entity selection for prompt: %s", prompt)
+
+        result = await hass.services.async_call(
+            "ai_task",
+            "generate_data",
+            {
+                "task_name": "vibedash_entity_selection",
+                "entity_id": ai_task_entity,
+                "instructions": selection_prompt,
+            },
+            blocking=True,
+            return_response=True,
+        )
+
+        entity_ids = _parse_entity_ids(result.get("data", ""))
+
+        if not entity_ids:
+            connection.send_error(
+                msg_id,
+                "no_entities",
+                "LLM could not identify relevant entities for your request",
+            )
+            return
+
+        _LOGGER.debug(
+            "Stream pass 1 selected %d entities: %s", len(entity_ids), entity_ids
+        )
+
+        # --- Pass 2: Dashboard generation ---
+        entity_details = entity_cache.get_detailed_context(entity_ids)
+        dashboard_prompt = DASHBOARD_GENERATION_PROMPT.format(
+            entity_details=entity_details,
+            prompt=prompt,
+        )
+
+        if streaming_config:
+            # Stream the dashboard generation
+            connection.send_message(
+                websocket_api.event_message(
+                    msg_id,
+                    {
+                        "stage": "dashboard_generation",
+                        "message": f"Found {len(entity_ids)} entities, streaming dashboard...",
+                        "entity_count": len(entity_ids),
+                        "streaming": True,
+                    },
+                )
+            )
+
+            from .streaming import stream_llm_response
+
+            accumulated = ""
+            async for chunk in stream_llm_response(
+                provider=streaming_config["provider"],
+                api_key=streaming_config["api_key"],
+                prompt=dashboard_prompt,
+                model=streaming_config.get("model"),
+                base_url=streaming_config.get("base_url"),
+            ):
+                accumulated += chunk
+                connection.send_message(
+                    websocket_api.event_message(
+                        msg_id,
+                        {
+                            "stage": "streaming",
+                            "chunk": chunk,
+                            "accumulated": accumulated,
+                        },
+                    )
+                )
+
+            # Parse the final accumulated response
+            dashboard = _parse_dashboard(accumulated)
+
+        else:
+            # Non-streaming fallback via ai_task
+            connection.send_message(
+                websocket_api.event_message(
+                    msg_id,
+                    {
+                        "stage": "dashboard_generation",
+                        "message": f"Found {len(entity_ids)} entities, generating dashboard...",
+                        "entity_count": len(entity_ids),
+                        "streaming": False,
+                    },
+                )
+            )
+
+            result = await hass.services.async_call(
+                "ai_task",
+                "generate_data",
+                {
+                    "task_name": "vibedash_dashboard_generation",
+                    "entity_id": ai_task_entity,
+                    "instructions": dashboard_prompt,
+                },
+                blocking=True,
+                return_response=True,
+            )
+
+            dashboard = _parse_dashboard(result.get("data", ""))
+
+        if not dashboard:
+            connection.send_error(
+                msg_id,
+                "parse_error",
+                "Failed to parse dashboard from LLM response",
+            )
+            return
+
+        _validate_dashboard_entities(hass, dashboard)
+
+        # Send final result as an event (not send_result) so frontend
+        # knows it came through the streaming pipeline
+        connection.send_message(
+            websocket_api.event_message(
+                msg_id,
+                {"stage": "complete", "dashboard": dashboard},
+            )
+        )
+
+    except Exception:
+        _LOGGER.exception("Error in streaming dashboard generation")
+        connection.send_error(
+            msg_id, "generation_error", "Failed to generate dashboard"
         )
 
 
