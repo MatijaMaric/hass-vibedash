@@ -7,6 +7,8 @@ import { HAGauge } from "./components/HAGauge";
 import { HAEntityList } from "./components/HAEntityList";
 import { HAMarkdown } from "./components/HAMarkdown";
 import { HAMiniGraph } from "./components/HAMiniGraph";
+import { GridItem } from "./components/GridItem";
+import { Masonry } from "./components/Masonry";
 
 /**
  * Registry mapping catalog component names to React implementations.
@@ -34,5 +36,7 @@ export const { registry } = defineRegistry(catalog, {
     HAEntityList,
     HAMarkdown,
     HAMiniGraph,
+    GridItem,
+    Masonry,
   },
 });

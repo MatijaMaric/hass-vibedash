@@ -94,6 +94,38 @@ const haComponentDefinitions = {
     description:
       "Compact card showing current value with a small sparkline trend below. The default choice for individual sensor entities (temperature, humidity, power, energy).",
   },
+
+  GridItem: {
+    props: z.object({
+      span: z
+        .number()
+        .min(1)
+        .max(6)
+        .default(1)
+        .describe("Number of grid columns to span"),
+    }),
+    slots: ["children"] as string[],
+    description:
+      "Grid child wrapper that controls column span. Use inside a Grid to make a child span multiple columns.",
+  },
+
+  Masonry: {
+    props: z.object({
+      columns: z
+        .number()
+        .min(2)
+        .max(4)
+        .default(3)
+        .describe("Number of masonry columns"),
+      gap: z
+        .enum(["sm", "md", "lg"])
+        .nullable()
+        .describe("Gap between items"),
+    }),
+    slots: ["children"] as string[],
+    description:
+      "Masonry layout where cards of different heights pack tightly. Best for mixed card types.",
+  },
 } as const;
 
 /**

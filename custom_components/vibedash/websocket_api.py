@@ -40,56 +40,76 @@ entity_id strings. Only include entities from the available list above.
 Return ONLY valid JSON, no other text."""
 
 DASHBOARD_GENERATION_PROMPT = """\
-You are a Home Assistant dashboard generator. Create a well-organized dashboard \
-layout as a json-render spec based on the user's request.
+You are a Home Assistant dashboard generator. Create a visually rich, \
+multi-column dashboard layout as a json-render spec based on the user's request.
 
 {entity_details}
 
 Available component types:
 
-HA data components:
+Data components:
 - "HAMiniGraph": Compact card with current value + sparkline trend. \
 Props: title (string), entity (single entity_id), \
 timeRange ("1h"|"6h"|"24h"|"7d"|"30d", default "24h"). \
-THIS IS THE DEFAULT CARD for individual sensors (temperature, humidity, power, energy, etc.)
+DEFAULT card for individual sensors (temperature, humidity, power, energy, etc.)
 - "HAChart": Full time-series chart for comparing multiple entities on one axis. \
 Props: title (string), chartType ("line"|"bar"|"area"), \
 entities (array of entity_ids, max 10), timeRange ("1h"|"6h"|"24h"|"7d"|"30d"). \
 Use ONLY when comparing 2+ related entities together.
 - "HAMetric": Single big number without trend. Props: title (string), entity (single entity_id). \
-Use for non-numeric or rarely changing values, or when sparkline is not useful.
+Use for non-numeric or rarely changing values.
 - "HAGauge": Semicircle gauge. Props: title (string), entity (single entity_id), \
 min (number), max (number). Use for bounded percentages (battery, humidity).
 - "HAEntityList": Compact list of entities. Props: title (string), \
 entities (array of entity_ids), timeRange (optional). \
-Use for batteries or groups of similar simple entities.
+Use for groups of similar entities (batteries, lights, doors).
 - "HAMarkdown": Text/analysis card. Props: title (string), content (markdown string).
 
 Layout components:
-- "Grid": Grid container. Props: columns (number, 1-4), gap (number). \
+- "Grid": CSS grid container. Props: columns (number, 1-6), gap ("sm"|"md"|"lg"). \
 Children: array of element IDs.
+- "GridItem": Column-span wrapper for Grid children. Props: span (number, 1-6). \
+Children: array of element IDs. Use inside Grid to make a child span multiple columns. \
+Example: in a 3-column Grid, span=3 for full-width, span=2 for two-thirds width.
+- "Masonry": Masonry layout where cards of different heights pack tightly (Pinterest-style). \
+Props: columns (number, 2-4), gap ("sm"|"md"|"lg"). \
+Children: array of element IDs (placed directly, no GridItem needed). \
+Best for overview dashboards with many mixed-height cards.
+- "Stack": Flex container. Props: direction ("horizontal"|"vertical"), \
+gap ("none"|"sm"|"md"|"lg"). Children: array of element IDs.
 - "Card": Card wrapper. Props: title (string, optional). Children: array of element IDs.
-- "Stack": Flex container. Props: direction ("row"|"column"), gap (number). \
-Children: array of element IDs.
 - "Heading": Section heading. Props: text (string), level (1-4).
 - "Text": Body text. Props: text (string).
 
-Dashboard design rules:
-1. GROUP entities by category with Heading elements (e.g., "Climate", "Power", \
-"Sensors", "Batteries"). Each section gets a level-2 Heading followed by its cards.
-2. Use a NESTED layout: root Grid (1 column) → sections, where each section is a \
-Stack(direction="column") containing a Heading + Grid of cards for that category.
-3. Put HAMiniGraph cards in 2-column Grids within sections for compact layout.
-4. HAMiniGraph is the DEFAULT for individual sensor entities. Use it for temperature, \
-humidity, power, energy, illuminance, pressure, CO2, TVOC, voltage, current, etc.
-5. Use HAChart ONLY when overlaying 2+ related entities (e.g., indoor vs outdoor temp, \
-or production vs consumption).
-6. Use HAEntityList for batteries (group all battery sensors into one list).
-7. Use HAGauge for single bounded percentages when visual emphasis is needed.
-8. Use HAMarkdown sparingly — only for a brief summary if the user's request implies analysis.
-9. Create 10-25 total elements for a rich, informative dashboard.
-10. Give each card a short, clear title (e.g., "Living Room Temperature", not \
-"Temperature Sensor for the Living Room Area").
+Layout strategy — choose the best approach for the content:
+
+GRID + GRIDITEM (structured layouts with emphasis):
+Use when you want precise control over card widths. Place cards in a Grid (typically \
+columns=3 or columns=4) and wrap each child in GridItem with the appropriate span. \
+Wide cards like HAChart or HAEntityList get span=2 or span=3. \
+Compact cards like HAMiniGraph, HAMetric, HAGauge get span=1.
+
+MASONRY (dense overview layouts):
+Use when you have many cards of different heights and want them to pack tightly. \
+Place cards directly as children of Masonry — no GridItem needed. \
+Best for "show me everything" dashboards with lots of sensors.
+
+MIX BOTH: Use Grid+GridItem for a hero section at the top (e.g., a full-width chart), \
+then Masonry for the detail cards below.
+
+Layout rules:
+1. The ROOT element must be a Stack with direction="vertical" and gap="lg".
+2. Group entities by category with level-2 Heading elements.
+3. After each Heading, place cards in a Grid or Masonry layout.
+4. VARY card sizes to create visual hierarchy — important data gets more space \
+(e.g., a key chart at span=3 in a 3-column grid, while metrics are span=1).
+5. HAMiniGraph is the DEFAULT for individual sensor entities.
+6. Use HAChart ONLY for comparing 2+ related entities on one axis.
+7. Use HAEntityList for groups of similar entities (batteries, lights).
+8. Use HAGauge for bounded percentages when visual emphasis is needed.
+9. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
+10. Create 10-30 total elements for a rich, informative dashboard.
+11. Give each card a short, clear title (e.g., "Living Room Temp").
 
 User request: {prompt}
 
