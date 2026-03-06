@@ -6,20 +6,27 @@ interface HAMetricProps {
   entity: string;
 }
 
+function formatValue(raw: string): string {
+  const num = parseFloat(raw);
+  if (isNaN(num)) return raw;
+  // Show up to 1 decimal for clean display
+  return num % 1 === 0 ? num.toString() : num.toFixed(1);
+}
+
 export function HAMetric({ props }: BaseComponentProps<HAMetricProps>) {
   const { title, entity } = props;
   const state = useEntityState(entity);
 
-  const value = state?.state ?? "—";
+  const rawValue = state?.state ?? "—";
+  const value = rawValue === "—" ? rawValue : formatValue(rawValue);
   const unit = (state?.attributes?.unit_of_measurement as string) ?? "";
-  const friendlyName = (state?.attributes?.friendly_name as string) ?? entity;
 
   return (
     <div className="rounded-lg border border-border bg-card p-4">
-      <h3 className="mb-1 text-sm font-medium text-muted-foreground">
+      <h3 className="mb-2 text-sm font-medium text-muted-foreground">
         {title}
       </h3>
-      <div className="flex items-baseline gap-2">
+      <div className="flex items-baseline gap-1">
         <span className="text-4xl font-bold tracking-tight text-foreground">
           {value}
         </span>
@@ -27,7 +34,6 @@ export function HAMetric({ props }: BaseComponentProps<HAMetricProps>) {
           <span className="text-lg text-muted-foreground">{unit}</span>
         )}
       </div>
-      <p className="mt-1 text-xs text-muted-foreground">{friendlyName}</p>
     </div>
   );
 }

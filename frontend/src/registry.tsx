@@ -6,6 +6,7 @@ import { HAMetric } from "./components/HAMetric";
 import { HAGauge } from "./components/HAGauge";
 import { HAEntityList } from "./components/HAEntityList";
 import { HAMarkdown } from "./components/HAMarkdown";
+import { HAMiniGraph } from "./components/HAMiniGraph";
 
 /**
  * Registry mapping catalog component names to React implementations.
@@ -32,5 +33,6 @@ export const { registry } = defineRegistry(catalog, {
     HAGauge,
     HAEntityList,
     HAMarkdown,
+    HAMiniGraph,
   },
 });
