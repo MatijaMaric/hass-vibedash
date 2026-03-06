@@ -56,9 +56,21 @@ ruff format --check custom_components/vibedash/
 
 ### Releasing
 
-1. Update `version` in `custom_components/vibedash/manifest.json`
-2. Push a tag matching `v<version>` (e.g. `v0.2.0`)
-3. The GitHub Actions `release.yml` workflow verifies the manifest version matches the tag and creates a GitHub Release
+Use the `release.ps1` script to automate version bumping and tag creation:
+
+```powershell
+.\release.ps1 patch    # 0.0.15 → 0.0.16
+.\release.ps1 minor    # 0.0.15 → 0.1.0
+.\release.ps1 major    # 0.0.15 → 1.0.0
+```
+
+The script will:
+1. Update version in both `custom_components/vibedash/manifest.json` and `frontend/package.json`
+2. Create a commit with conventional commit message: `chore: bump version to X.Y.Z`
+3. Create an annotated git tag: `vX.Y.Z`
+4. Push both the commit and tag to origin
+
+The GitHub Actions `release.yml` workflow then verifies the manifest version matches the tag and creates a GitHub Release.
 
 ## Key Conventions
 
@@ -67,3 +79,4 @@ ruff format --check custom_components/vibedash/
 - **Entity cache** — rebuilt on startup and on `EVENT_ENTITY_REGISTRY_UPDATED`; persisted via HA storage
 - **Frontend** — single vanilla JS file, no build step required; served as a static HA panel
 - **AI agnostic** — delegates all LLM calls to HA's `ai_task.generate_data` service, works with any configured AI Task provider
+- **Conventional commits** — all commits follow the [Conventional Commits](https://www.conventionalcommits.org/) format (e.g., `feat:`, `fix:`, `chore:`, etc.)
