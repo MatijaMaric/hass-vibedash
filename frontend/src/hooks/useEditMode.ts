@@ -46,35 +46,36 @@ function findParent(
   return null;
 }
 
-const CONTAINER_TYPES = new Set(["Stack", "Grid", "Masonry"]);
-
 /** Walk the spec tree and return all containers with their direct children. */
 export function getEditableContainers(
   spec: DashboardSpec,
 ): EditableContainer[] {
   const containers: EditableContainer[] = [];
-  const rootEl = getElement(spec, spec.root);
-  if (!rootEl.children?.length) return containers;
+  const visited = new Set<string>();
 
-  // Root stack is a container for top-level reordering
-  containers.push({
-    containerId: spec.root,
-    containerType: rootEl.type ?? "Stack",
-    childIds: [...rootEl.children],
-  });
+  function walk(id: string, isRoot: boolean = false): void {
+    if (visited.has(id)) return;
+    visited.add(id);
 
-  // Also add nested containers (e.g., Masonry/Grid inside root Stack)
-  for (const childId of rootEl.children) {
-    const child = getElement(spec, childId);
-    if (child.type && CONTAINER_TYPES.has(child.type) && child.children?.length) {
+    const el = getElement(spec, id);
+    if (!el.children?.length) return;
+
+    // Treat elements with 2+ children as editable containers.
+    // Always include root (even with 1 child) for top-level removal.
+    if (el.children.length >= 2 || isRoot) {
       containers.push({
-        containerId: childId,
-        containerType: child.type,
-        childIds: [...child.children],
+        containerId: id,
+        containerType: el.type ?? "Stack",
+        childIds: [...el.children],
       });
+    }
+
+    for (const childId of el.children) {
+      walk(childId);
     }
   }
 
+  walk(spec.root, true);
   return containers;
 }
 
