@@ -62,6 +62,31 @@ async def stream_llm_response(
         raise ValueError(f"Unknown streaming provider: {provider}")
 
 
+async def generate_llm_response(
+    provider: str,
+    api_key: str,
+    prompt: str,
+    *,
+    model: str | None = None,
+    base_url: str | None = None,
+) -> str:
+    """Get a complete (non-streaming) LLM response.
+
+    Collects all streamed chunks into a single string.
+    Used for Pass 1 entity selection when no AI Task provider is configured.
+    """
+    chunks: list[str] = []
+    async for chunk in stream_llm_response(
+        provider=provider,
+        api_key=api_key,
+        prompt=prompt,
+        model=model,
+        base_url=base_url,
+    ):
+        chunks.append(chunk)
+    return "".join(chunks)
+
+
 async def validate_provider(
     provider: str,
     api_key: str,

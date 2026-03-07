@@ -19,6 +19,7 @@ from .const import (
     CONF_STREAMING_MODEL,
     CONF_STREAMING_PROVIDER,
     DOMAIN,
+    PROVIDER_AI_TASK,
     STREAMING_PROVIDER_NONE,
     TIME_RANGES,
 )
@@ -219,7 +220,7 @@ Do not wrap in code fences. Each line must be valid JSON."""
 def _get_streaming_config(hass: HomeAssistant) -> dict[str, Any] | None:
     """Get streaming provider config if configured.
 
-    Returns None if streaming is not configured.
+    Returns None if streaming is not configured (AI Task mode).
     """
     entries = hass.config_entries.async_entries(DOMAIN)
     if not entries:
@@ -229,7 +230,8 @@ def _get_streaming_config(hass: HomeAssistant) -> dict[str, Any] | None:
     data = {**entry.data, **entry.options}
     provider = data.get(CONF_STREAMING_PROVIDER, STREAMING_PROVIDER_NONE)
 
-    if provider == STREAMING_PROVIDER_NONE:
+    # "none" (legacy) and "ai_task" both mean no streaming
+    if provider in (STREAMING_PROVIDER_NONE, PROVIDER_AI_TASK):
         return None
 
     return {
@@ -238,6 +240,17 @@ def _get_streaming_config(hass: HomeAssistant) -> dict[str, Any] | None:
         "model": data.get(CONF_STREAMING_MODEL),
         "base_url": data.get(CONF_STREAMING_BASE_URL),
     }
+
+
+def _get_ai_task_entity(hass: HomeAssistant) -> str | None:
+    """Get the configured AI Task entity, or None if using a streaming provider."""
+    entries = hass.config_entries.async_entries(DOMAIN)
+    if not entries:
+        return None
+    entry = entries[0]
+    data = {**entry.data, **entry.options}
+    entity = data.get(CONF_AI_TASK_ENTRY, "")
+    return entity if entity else None
 
 
 def async_register_commands(hass: HomeAssistant) -> None:
@@ -293,13 +306,11 @@ async def ws_generate(
         connection.send_error(msg_id, "not_configured", "VibeDash is not configured")
         return
 
-    entry = entries[0]
-    # options takes precedence over data so users can switch providers via the options flow
-    ai_task_entity = entry.options.get(CONF_AI_TASK_ENTRY) or entry.data.get(
-        CONF_AI_TASK_ENTRY
-    )
-    if not ai_task_entity:
-        connection.send_error(msg_id, "no_ai_task", "No AI Task provider configured")
+    ai_task_entity = _get_ai_task_entity(hass)
+    streaming_config = _get_streaming_config(hass)
+
+    if not ai_task_entity and not streaming_config:
+        connection.send_error(msg_id, "not_configured", "No AI provider configured")
         return
 
     entity_cache = hass.data[DOMAIN].get("entity_cache")
@@ -325,20 +336,32 @@ async def ws_generate(
 
         _LOGGER.debug("Pass 1: Entity selection for prompt: %s", prompt)
 
-        result = await hass.services.async_call(
-            "ai_task",
-            "generate_data",
-            {
-                "task_name": "vibedash_entity_selection",
-                "entity_id": ai_task_entity,
-                "instructions": selection_prompt,
-            },
-            blocking=True,
-            return_response=True,
-        )
+        if ai_task_entity:
+            result = await hass.services.async_call(
+                "ai_task",
+                "generate_data",
+                {
+                    "task_name": "vibedash_entity_selection",
+                    "entity_id": ai_task_entity,
+                    "instructions": selection_prompt,
+                },
+                blocking=True,
+                return_response=True,
+            )
+            raw_response = result.get("data", "")
+        else:
+            from .streaming import generate_llm_response
+
+            raw_response = await generate_llm_response(
+                provider=streaming_config["provider"],
+                api_key=streaming_config["api_key"],
+                prompt=selection_prompt,
+                model=streaming_config.get("model"),
+                base_url=streaming_config.get("base_url"),
+            )
 
         # Parse entity selection response
-        entity_ids = _parse_entity_ids(result.get("data", ""))
+        entity_ids = _parse_entity_ids(raw_response)
 
         if not entity_ids:
             connection.send_error(
@@ -371,20 +394,32 @@ async def ws_generate(
 
         _LOGGER.debug("Pass 2: Dashboard generation")
 
-        result = await hass.services.async_call(
-            "ai_task",
-            "generate_data",
-            {
-                "task_name": "vibedash_dashboard_generation",
-                "entity_id": ai_task_entity,
-                "instructions": dashboard_prompt,
-            },
-            blocking=True,
-            return_response=True,
-        )
+        if ai_task_entity:
+            result = await hass.services.async_call(
+                "ai_task",
+                "generate_data",
+                {
+                    "task_name": "vibedash_dashboard_generation",
+                    "entity_id": ai_task_entity,
+                    "instructions": dashboard_prompt,
+                },
+                blocking=True,
+                return_response=True,
+            )
+            raw_response = result.get("data", "")
+        else:
+            from .streaming import generate_llm_response
+
+            raw_response = await generate_llm_response(
+                provider=streaming_config["provider"],
+                api_key=streaming_config["api_key"],
+                prompt=dashboard_prompt,
+                model=streaming_config.get("model"),
+                base_url=streaming_config.get("base_url"),
+            )
 
         # Parse dashboard response
-        dashboard = _parse_dashboard(result.get("data", ""))
+        dashboard = _parse_dashboard(raw_response)
 
         if not dashboard:
             connection.send_error(
@@ -438,12 +473,11 @@ async def ws_generate_stream(
         connection.send_error(msg_id, "not_configured", "VibeDash is not configured")
         return
 
-    entry = entries[0]
-    ai_task_entity = entry.options.get(CONF_AI_TASK_ENTRY) or entry.data.get(
-        CONF_AI_TASK_ENTRY
-    )
-    if not ai_task_entity:
-        connection.send_error(msg_id, "no_ai_task", "No AI Task provider configured")
+    ai_task_entity = _get_ai_task_entity(hass)
+    streaming_config = _get_streaming_config(hass)
+
+    if not ai_task_entity and not streaming_config:
+        connection.send_error(msg_id, "not_configured", "No AI provider configured")
         return
 
     entity_cache = hass.data[DOMAIN].get("entity_cache")
@@ -451,10 +485,8 @@ async def ws_generate_stream(
         connection.send_error(msg_id, "no_cache", "Entity cache not initialized")
         return
 
-    streaming_config = _get_streaming_config(hass)
-
     try:
-        # --- Pass 1: Entity selection (always non-streaming via ai_task) ---
+        # --- Pass 1: Entity selection ---
         connection.send_message(
             websocket_api.event_message(
                 msg_id,
@@ -470,19 +502,31 @@ async def ws_generate_stream(
 
         _LOGGER.debug("Stream pass 1: Entity selection for prompt: %s", prompt)
 
-        result = await hass.services.async_call(
-            "ai_task",
-            "generate_data",
-            {
-                "task_name": "vibedash_entity_selection",
-                "entity_id": ai_task_entity,
-                "instructions": selection_prompt,
-            },
-            blocking=True,
-            return_response=True,
-        )
+        if ai_task_entity:
+            result = await hass.services.async_call(
+                "ai_task",
+                "generate_data",
+                {
+                    "task_name": "vibedash_entity_selection",
+                    "entity_id": ai_task_entity,
+                    "instructions": selection_prompt,
+                },
+                blocking=True,
+                return_response=True,
+            )
+            raw_response = result.get("data", "")
+        else:
+            from .streaming import generate_llm_response
 
-        entity_ids = _parse_entity_ids(result.get("data", ""))
+            raw_response = await generate_llm_response(
+                provider=streaming_config["provider"],
+                api_key=streaming_config["api_key"],
+                prompt=selection_prompt,
+                model=streaming_config.get("model"),
+                base_url=streaming_config.get("base_url"),
+            )
+
+        entity_ids = _parse_entity_ids(raw_response)
 
         if not entity_ids:
             connection.send_error(
@@ -550,7 +594,7 @@ async def ws_generate_stream(
                 # Fallback: try parsing as regular JSON in case LLM ignored format
                 dashboard = _parse_dashboard(accumulated)
 
-        else:
+        elif ai_task_entity:
             # Non-streaming fallback via ai_task
             connection.send_message(
                 websocket_api.event_message(
@@ -577,6 +621,13 @@ async def ws_generate_stream(
             )
 
             dashboard = _parse_dashboard(result.get("data", ""))
+
+        else:
+            # No provider available for Pass 2
+            connection.send_error(
+                msg_id, "not_configured", "No AI provider configured for generation"
+            )
+            return
 
         if not dashboard:
             connection.send_error(
