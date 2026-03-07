@@ -1,17 +1,34 @@
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { createSpecStreamCompiler } from "@json-render/core";
 import { Renderer, JSONUIProvider } from "@json-render/react";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  TouchSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { registry } from "./registry";
 import { useCallWS, useSubscribeMessage } from "./hooks/useHass";
 import { PromptBar, EmptyState, LoadingState } from "./components/PromptBar";
 import { Sidebar } from "./components/Sidebar";
 import { SaveDialog } from "./components/SaveDialog";
+import { EditableCard } from "./components/EditableCard";
+import { EditModeToolbar } from "./components/EditModeToolbar";
 import { useSavedDashboards } from "./hooks/useSavedDashboards";
-
-interface DashboardSpec {
-  root: string;
-  elements: Record<string, unknown>;
-}
+import {
+  useEditMode,
+  getEditableContainers,
+  type DashboardSpec,
+} from "./hooks/useEditMode";
 
 interface StreamEvent {
   stage: "entity_selection" | "dashboard_generation" | "streaming" | "complete";
@@ -42,6 +59,71 @@ function StreamingIndicator() {
   );
 }
 
+/** Render a single container's children as sortable editable cards. */
+function EditableContainer({
+  containerId,
+  containerType,
+  childIds,
+  spec,
+  onRemove,
+  onDragEnd,
+}: {
+  containerId: string;
+  containerType: string;
+  childIds: string[];
+  spec: DashboardSpec;
+  onRemove: (id: string) => void;
+  onDragEnd: (event: DragEndEvent) => void;
+}) {
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 200, tolerance: 5 },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    }),
+  );
+
+  // Choose layout CSS based on container type
+  const layoutClass =
+    containerType === "Masonry"
+      ? "columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid"
+      : containerType === "Grid"
+        ? "grid grid-cols-3 gap-5"
+        : "flex flex-col gap-5";
+
+  return (
+    <DndContext
+      sensors={sensors}
+      collisionDetection={closestCenter}
+      onDragEnd={onDragEnd}
+    >
+      <SortableContext
+        items={childIds}
+        strategy={verticalListSortingStrategy}
+      >
+        <div className={layoutClass}>
+          {childIds.map((childId) => (
+            <EditableCard
+              key={childId}
+              elementId={childId}
+              onRemove={onRemove}
+            >
+              <JSONUIProvider registry={registry}>
+                <Renderer
+                  spec={{ root: childId, elements: spec.elements }}
+                  registry={registry}
+                />
+              </JSONUIProvider>
+            </EditableCard>
+          ))}
+        </div>
+      </SortableContext>
+    </DndContext>
+  );
+}
+
 export function App() {
   const callWS = useCallWS();
   const subscribeMessage = useSubscribeMessage();
@@ -64,8 +146,11 @@ export function App() {
   const { dashboards, saveDashboard, deleteDashboard } =
     useSavedDashboards();
 
+  const editMode = useEditMode();
+
   const handleSubmit = useCallback(
     async (prompt: string) => {
+      if (editMode.isEditing) return;
       setLoading(true);
       setError(null);
       setSpec(null);
@@ -162,12 +247,49 @@ export function App() {
         compilerRef.current = null;
       }
     },
-    [callWS, subscribeMessage],
+    [callWS, subscribeMessage, editMode.isEditing],
+  );
+
+  const handleEnterEditMode = useCallback(() => {
+    if (spec) editMode.enterEditMode(spec);
+  }, [spec, editMode.enterEditMode]);
+
+  const handleApplyEdits = useCallback(() => {
+    const edited = editMode.applyEdits();
+    if (edited) setSpec(edited);
+  }, [editMode.applyEdits]);
+
+  const handleDragEnd = useCallback(
+    (containerId: string) => (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id || !editMode.editSpec) return;
+
+      const el = editMode.editSpec.elements[containerId] as {
+        children?: string[];
+      };
+      const children = el?.children;
+      if (!children) return;
+
+      const fromIndex = children.indexOf(active.id as string);
+      const toIndex = children.indexOf(over.id as string);
+      if (fromIndex === -1 || toIndex === -1) return;
+
+      editMode.moveElement(containerId, fromIndex, toIndex);
+    },
+    [editMode.editSpec, editMode.moveElement],
   );
 
   const displaySpec = spec ?? streamingSpec;
   const isStreaming = loading && streamingSpec !== null;
   const showFullLoading = loading && !streamingSpec;
+
+  const editContainers = useMemo(
+    () =>
+      editMode.isEditing && editMode.editSpec
+        ? getEditableContainers(editMode.editSpec)
+        : [],
+    [editMode.isEditing, editMode.editSpec],
+  );
 
   return (
     <div className="flex h-full flex-col bg-background">
@@ -176,7 +298,9 @@ export function App() {
         loading={loading}
         history={history}
         onSave={() => setShowSaveDialog(true)}
-        canSave={!!spec && !loading}
+        canSave={!!spec && !loading && !editMode.isEditing}
+        onEdit={handleEnterEditMode}
+        canEdit={!!spec && !loading && !editMode.isEditing}
         onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
       />
 
@@ -186,6 +310,7 @@ export function App() {
           open={sidebarOpen}
           onToggle={() => setSidebarOpen((prev) => !prev)}
           onLoad={(saved) => {
+            if (editMode.isEditing) return;
             setSpec(saved.dashboard);
             setCurrentPrompt(saved.prompt);
             setActiveDashboardId(saved.id);
@@ -233,7 +358,32 @@ export function App() {
 
           {showFullLoading && <LoadingState message={progressMessage} />}
 
-          {displaySpec && (
+          {/* Edit mode view */}
+          {editMode.isEditing && editMode.editSpec && (
+            <div className="w-full px-4 py-4 md:px-8 md:py-8 pb-24">
+              <div className="flex flex-col gap-6">
+                {editContainers.map((container) => (
+                  <EditableContainer
+                    key={container.containerId}
+                    containerId={container.containerId}
+                    containerType={container.containerType}
+                    childIds={container.childIds}
+                    spec={editMode.editSpec!}
+                    onRemove={editMode.removeElement}
+                    onDragEnd={handleDragEnd(container.containerId)}
+                  />
+                ))}
+              </div>
+              <EditModeToolbar
+                onDone={handleApplyEdits}
+                onCancel={editMode.cancelEdits}
+                hasChanges={editMode.hasChanges}
+              />
+            </div>
+          )}
+
+          {/* Normal view */}
+          {!editMode.isEditing && displaySpec && (
             <div className="w-full px-4 py-4 md:px-8 md:py-8">
               {isStreaming && <StreamingIndicator />}
               <JSONUIProvider registry={registry}>
@@ -242,7 +392,7 @@ export function App() {
             </div>
           )}
 
-          {!loading && !displaySpec && !error && (
+          {!loading && !displaySpec && !error && !editMode.isEditing && (
             <EmptyState onSuggestionClick={handleSubmit} />
           )}
         </main>

@@ -6,6 +6,8 @@ interface PromptBarProps {
   history: string[];
   onSave?: () => void;
   canSave?: boolean;
+  onEdit?: () => void;
+  canEdit?: boolean;
   onToggleSidebar?: () => void;
 }
 
@@ -22,6 +24,8 @@ export function PromptBar({
   history,
   onSave,
   canSave,
+  onEdit,
+  canEdit,
   onToggleSidebar,
 }: PromptBarProps) {
   const [input, setInput] = useState("");
@@ -122,6 +126,33 @@ export function PromptBar({
               )}
             </button>
           </div>
+
+          {/* Edit button */}
+          {onEdit && canEdit && (
+            <button
+              type="button"
+              onClick={onEdit}
+              className="shrink-0 cursor-pointer rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+              aria-label="Edit dashboard"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+                <path
+                  d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          )}
 
           {/* Save button */}
           {onSave && canSave && (
