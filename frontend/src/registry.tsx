@@ -16,9 +16,40 @@ import { Masonry } from "./components/Masonry";
  */
 export const { registry } = defineRegistry(catalog, {
   components: {
-    // shadcn built-in implementations
+    // shadcn built-in implementations (Stack overridden to default align=stretch)
     Card: shadcnComponents.Card,
-    Stack: shadcnComponents.Stack,
+    Stack: ({ props, children }) => {
+      const isHorizontal = props.direction === "horizontal";
+      const gapMap: Record<string, string> = {
+        none: "gap-0",
+        sm: "gap-2",
+        md: "gap-3",
+        lg: "gap-4",
+      };
+      const alignMap: Record<string, string> = {
+        start: "items-start",
+        center: "items-center",
+        end: "items-end",
+        stretch: "items-stretch",
+      };
+      const justifyMap: Record<string, string> = {
+        start: "",
+        center: "justify-center",
+        end: "justify-end",
+        between: "justify-between",
+        around: "justify-around",
+      };
+      const gapClass = gapMap[props.gap ?? "md"] ?? "gap-3";
+      const alignClass = alignMap[props.align ?? "stretch"] ?? "items-stretch";
+      const justifyClass = justifyMap[props.justify ?? ""] ?? "";
+      return (
+        <div
+          className={`flex ${isHorizontal ? "flex-row flex-wrap" : "flex-col"} ${gapClass} ${alignClass} ${justifyClass}`}
+        >
+          {children}
+        </div>
+      );
+    },
     Grid: shadcnComponents.Grid,
     Heading: shadcnComponents.Heading,
     Text: shadcnComponents.Text,
