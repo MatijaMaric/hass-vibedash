@@ -85,13 +85,38 @@ function EditableContainer({
     }),
   );
 
-  // Choose layout CSS based on container type
+  // Read actual container props from the spec so edit mode matches view mode
+  const containerEl = spec.elements[containerId] as {
+    type?: string;
+    props?: Record<string, unknown>;
+  };
+  const containerProps = containerEl?.props ?? {};
+
+  const colsMap: Record<number, string> = {
+    1: "grid-cols-1",
+    2: "grid-cols-2",
+    3: "grid-cols-3",
+    4: "grid-cols-4",
+    5: "grid-cols-5",
+    6: "grid-cols-6",
+  };
+  const masonryColsMap: Record<number, string> = {
+    2: "columns-2",
+    3: "columns-3",
+    4: "columns-4",
+  };
+  const gapMap: Record<string, string> = {
+    sm: "gap-2",
+    md: "gap-3",
+    lg: "gap-4",
+  };
+
   const layoutClass =
     containerType === "Masonry"
-      ? "columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid"
+      ? `${masonryColsMap[Math.max(2, Math.min(4, (containerProps.columns as number) ?? 3))] ?? "columns-3"} [&>*]:mb-5 [&>*]:break-inside-avoid`
       : containerType === "Grid"
-        ? "grid grid-cols-3 gap-5"
-        : "flex flex-col gap-5";
+        ? `grid ${colsMap[Math.max(1, Math.min(6, (containerProps.columns as number) ?? 3))] ?? "grid-cols-3"} ${gapMap[(containerProps.gap as string) ?? "md"] ?? "gap-3"}`
+        : "flex flex-col gap-3 items-stretch";
 
   return (
     <DndContext
