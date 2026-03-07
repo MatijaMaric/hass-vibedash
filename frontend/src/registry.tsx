@@ -51,7 +51,23 @@ export const { registry } = defineRegistry(catalog, {
       );
     },
     Grid: shadcnComponents.Grid,
-    Heading: shadcnComponents.Heading,
+    Heading: ({ props }) => {
+      const level = props.level ?? "h2";
+      const cls =
+        level === "h1"
+          ? "text-2xl font-bold"
+          : level === "h3"
+            ? "text-base font-semibold"
+            : level === "h4"
+              ? "text-sm font-semibold"
+              : "text-lg font-semibold";
+      const Tag = level as keyof JSX.IntrinsicElements;
+      return (
+        <Tag className={`${cls} px-1 text-left text-foreground`}>
+          {props.text}
+        </Tag>
+      );
+    },
     Text: shadcnComponents.Text,
     Badge: shadcnComponents.Badge,
     Separator: shadcnComponents.Separator,
