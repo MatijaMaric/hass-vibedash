@@ -51,7 +51,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
   }
 
   return (
-    <div className="rounded-xl bg-card p-5">
+    <div className="rounded-xl bg-card p-6">
       <h3 className="mb-3 text-sm font-medium text-foreground">{title}</h3>
 
       {loading && (

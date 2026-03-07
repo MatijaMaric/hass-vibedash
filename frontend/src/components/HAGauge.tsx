@@ -42,7 +42,7 @@ export function HAGauge({ props }: BaseComponentProps<HAGaugeProps>) {
         : "var(--color-destructive)";
 
   return (
-    <div className="rounded-xl bg-card p-5">
+    <div className="rounded-xl bg-card p-6">
       <h3 className="mb-2 text-sm font-medium text-muted-foreground">
         {title}
       </h3>
