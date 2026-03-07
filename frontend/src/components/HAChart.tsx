@@ -13,7 +13,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { useHistory } from "../hooks/useHistory";
-import { useEntityState } from "../hooks/useHass";
+import { useHass } from "../hooks/useHass";
 
 const CHART_COLORS = [
   "var(--color-chart-1)",
@@ -33,13 +33,6 @@ interface HAChartProps {
   timeRange: string;
 }
 
-function EntityName({ entityId }: { entityId: string }) {
-  const state = useEntityState(entityId);
-  return (
-    <>{(state?.attributes?.friendly_name as string) ?? entityId}</>
-  );
-}
-
 function formatTime(time: string): string {
   const d = new Date(time);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -49,10 +42,12 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
   const { title, chartType, entities, timeRange } = props;
   const { data, loading, error } = useHistory(entities, timeRange);
 
-  // Build friendly name map by reading entity states
+  // Build friendly name map from HA entity states
+  const hass = useHass();
   const nameMap: Record<string, string> = {};
   for (const eid of entities) {
-    nameMap[eid] = eid; // fallback; actual names resolved in tooltip/legend
+    nameMap[eid] =
+      (hass.states[eid]?.attributes?.friendly_name as string) ?? eid;
   }
 
   return (
@@ -99,7 +94,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                 <Bar
                   key={entityId}
                   dataKey={entityId}
-                  name={entityId}
+                  name={nameMap[entityId]}
                   fill={CHART_COLORS[i % CHART_COLORS.length]}
                   radius={[4, 4, 0, 0]}
                   isAnimationActive={false}
@@ -133,7 +128,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   key={entityId}
                   type="monotone"
                   dataKey={entityId}
-                  name={entityId}
+                  name={nameMap[entityId]}
                   stroke={CHART_COLORS[i % CHART_COLORS.length]}
                   fill={CHART_COLORS[i % CHART_COLORS.length]}
                   fillOpacity={0.15}
@@ -169,7 +164,7 @@ export function HAChart({ props }: BaseComponentProps<HAChartProps>) {
                   key={entityId}
                   type="monotone"
                   dataKey={entityId}
-                  name={entityId}
+                  name={nameMap[entityId]}
                   stroke={CHART_COLORS[i % CHART_COLORS.length]}
                   dot={false}
                   strokeWidth={2}
