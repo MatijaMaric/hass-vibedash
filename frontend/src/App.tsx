@@ -41,6 +41,24 @@ interface StreamEvent {
 
 const MAX_HISTORY = 5;
 
+/**
+ * Remove child references that point to elements not yet in the spec.
+ * Prevents json-render "Missing element" warnings during streaming.
+ */
+function pruneOrphanRefs(spec: DashboardSpec): DashboardSpec {
+  const ids = new Set(Object.keys(spec.elements));
+  const pruned: DashboardSpec = { root: spec.root, elements: {} };
+  for (const [id, el] of Object.entries(spec.elements)) {
+    const elem = el as { children?: string[]; [k: string]: unknown };
+    if (Array.isArray(elem.children)) {
+      pruned.elements[id] = { ...elem, children: elem.children.filter((c) => ids.has(c)) };
+    } else {
+      pruned.elements[id] = el;
+    }
+  }
+  return pruned;
+}
+
 function StreamingIndicator() {
   return (
     <div className="mb-4 flex items-center gap-2">
@@ -280,8 +298,12 @@ export function App() {
     [editMode.editSpec, editMode.moveElement],
   );
 
-  const displaySpec = spec ?? streamingSpec;
   const isStreaming = loading && streamingSpec !== null;
+  const displaySpec = useMemo(() => {
+    if (spec) return spec;
+    if (streamingSpec) return pruneOrphanRefs(streamingSpec);
+    return null;
+  }, [spec, streamingSpec]);
   const showFullLoading = loading && !streamingSpec;
 
   const editContainers = useMemo(
