@@ -7,9 +7,9 @@ interface MasonryProps {
 }
 
 const gapValues: Record<string, string> = {
-  sm: "0.5rem",
-  md: "1.25rem",
-  lg: "1.5rem",
+  sm: "0.75rem",
+  md: "1.5rem",
+  lg: "2rem",
 };
 
 /**
@@ -31,7 +31,7 @@ export function Masonry({
 
   return (
     <div
-      className={`${cols} [&>*]:mb-5 [&>*]:break-inside-avoid`}
+      className={`${cols} [&>*]:mb-6 [&>*]:break-inside-avoid`}
       style={{ columnGap: gap }}
     >
       {children}
