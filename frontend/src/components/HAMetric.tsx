@@ -22,7 +22,7 @@ export function HAMetric({ props }: BaseComponentProps<HAMetricProps>) {
   const unit = (state?.attributes?.unit_of_measurement as string) ?? "";
 
   return (
-    <div className="rounded-xl bg-card p-5">
+    <div className="rounded-xl bg-card p-6">
       <h3 className="mb-2 text-sm font-medium text-muted-foreground">
         {title}
       </h3>

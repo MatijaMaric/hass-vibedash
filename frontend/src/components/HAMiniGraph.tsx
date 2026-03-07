@@ -32,7 +32,7 @@ export function HAMiniGraph({ props }: BaseComponentProps<HAMiniGraphProps>) {
   }
 
   return (
-    <div className="rounded-xl bg-card p-5">
+    <div className="rounded-xl bg-card p-6">
       <h3 className="mb-1 text-sm font-medium text-muted-foreground">
         {title}
       </h3>
