@@ -4,6 +4,9 @@ import { Renderer, JSONUIProvider } from "@json-render/react";
 import { registry } from "./registry";
 import { useCallWS, useSubscribeMessage } from "./hooks/useHass";
 import { PromptBar, EmptyState, LoadingState } from "./components/PromptBar";
+import { Sidebar } from "./components/Sidebar";
+import { SaveDialog } from "./components/SaveDialog";
+import { useSavedDashboards } from "./hooks/useSavedDashboards";
 
 interface DashboardSpec {
   root: string;
@@ -48,9 +51,18 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [history, setHistory] = useState<string[]>([]);
   const [progressMessage, setProgressMessage] = useState<string | null>(null);
+  const [currentPrompt, setCurrentPrompt] = useState<string | null>(null);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [showSaveDialog, setShowSaveDialog] = useState(false);
+  const [activeDashboardId, setActiveDashboardId] = useState<string | null>(
+    null,
+  );
   const compilerRef = useRef<ReturnType<
     typeof createSpecStreamCompiler
   > | null>(null);
+
+  const { dashboards, saveDashboard, deleteDashboard } =
+    useSavedDashboards();
 
   const handleSubmit = useCallback(
     async (prompt: string) => {
@@ -59,6 +71,8 @@ export function App() {
       setSpec(null);
       setStreamingSpec(null);
       setProgressMessage("Starting...");
+      setCurrentPrompt(prompt);
+      setActiveDashboardId(null);
       compilerRef.current = null;
 
       try {
@@ -157,58 +171,93 @@ export function App() {
 
   return (
     <div className="flex h-full flex-col bg-background">
-      <PromptBar onSubmit={handleSubmit} loading={loading} history={history} />
+      <PromptBar
+        onSubmit={handleSubmit}
+        loading={loading}
+        history={history}
+        onSave={() => setShowSaveDialog(true)}
+        canSave={!!spec && !loading}
+        onToggleSidebar={() => setSidebarOpen((prev) => !prev)}
+      />
 
-      <main className="flex flex-1 flex-col overflow-y-auto">
-        {error && (
-          <div className="mx-auto max-w-screen-xl px-4 pt-4">
-            <div className="flex items-center gap-2 rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-              <svg
-                className="h-4 w-4 shrink-0"
-                viewBox="0 0 24 24"
-                fill="none"
-              >
-                <path
-                  d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                />
-              </svg>
-              <span>{error}</span>
-              <button
-                onClick={() => setError(null)}
-                className="ml-auto cursor-pointer text-destructive hover:text-destructive/80"
-                aria-label="Dismiss error"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+      <div className="flex flex-1 overflow-hidden">
+        <Sidebar
+          dashboards={dashboards}
+          open={sidebarOpen}
+          onToggle={() => setSidebarOpen((prev) => !prev)}
+          onLoad={(saved) => {
+            setSpec(saved.dashboard);
+            setCurrentPrompt(saved.prompt);
+            setActiveDashboardId(saved.id);
+            setError(null);
+            setSidebarOpen(false);
+          }}
+          onDelete={deleteDashboard}
+          activeDashboardId={activeDashboardId}
+        />
+
+        <main className="flex flex-1 flex-col overflow-y-auto">
+          {error && (
+            <div className="mx-auto max-w-screen-xl px-4 pt-4">
+              <div className="flex items-center gap-2 rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+                <svg
+                  className="h-4 w-4 shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
                   <path
-                    d="M6 18L18 6M6 6l12 12"
+                    d="M12 9v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                     stroke="currentColor"
                     strokeWidth="2"
                     strokeLinecap="round"
                   />
                 </svg>
-              </button>
+                <span>{error}</span>
+                <button
+                  onClick={() => setError(null)}
+                  className="ml-auto cursor-pointer text-destructive hover:text-destructive/80"
+                  aria-label="Dismiss error"
+                >
+                  <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none">
+                    <path
+                      d="M6 18L18 6M6 6l12 12"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                    />
+                  </svg>
+                </button>
+              </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {showFullLoading && <LoadingState message={progressMessage} />}
+          {showFullLoading && <LoadingState message={progressMessage} />}
 
-        {displaySpec && (
-          <div className="mx-auto max-w-screen-2xl px-6 py-6">
-            {isStreaming && <StreamingIndicator />}
-            <JSONUIProvider registry={registry}>
-              <Renderer spec={displaySpec} registry={registry} />
-            </JSONUIProvider>
-          </div>
-        )}
+          {displaySpec && (
+            <div className="mx-auto max-w-screen-2xl px-6 py-6">
+              {isStreaming && <StreamingIndicator />}
+              <JSONUIProvider registry={registry}>
+                <Renderer spec={displaySpec} registry={registry} />
+              </JSONUIProvider>
+            </div>
+          )}
 
-        {!loading && !displaySpec && !error && (
-          <EmptyState onSuggestionClick={handleSubmit} />
-        )}
-      </main>
+          {!loading && !displaySpec && !error && (
+            <EmptyState onSuggestionClick={handleSubmit} />
+          )}
+        </main>
+      </div>
+
+      {showSaveDialog && spec && currentPrompt && (
+        <SaveDialog
+          defaultName={currentPrompt.slice(0, 50)}
+          onSave={async (name) => {
+            await saveDashboard(name, currentPrompt, spec);
+            setShowSaveDialog(false);
+          }}
+          onCancel={() => setShowSaveDialog(false)}
+        />
+      )}
     </div>
   );
 }
