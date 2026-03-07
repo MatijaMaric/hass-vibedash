@@ -323,7 +323,7 @@ export function App() {
 
         <main className="flex flex-1 flex-col overflow-y-auto">
           {error && (
-            <div className="mx-auto max-w-screen-xl px-4 pt-4 md:px-8 md:pt-8">
+            <div className="w-full px-4 pt-4 md:px-8 md:pt-8">
               <div className="flex items-center gap-2 rounded-xl border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
                 <svg
                   className="h-4 w-4 shrink-0"
@@ -360,7 +360,7 @@ export function App() {
 
           {/* Edit mode view */}
           {editMode.isEditing && editMode.editSpec && (
-            <div className="mx-auto max-w-screen-2xl px-4 py-4 md:px-8 md:py-8 pb-24">
+            <div className="w-full px-4 py-4 md:px-8 md:py-8 pb-24">
               <div className="flex flex-col gap-6">
                 {editContainers.map((container) => (
                   <EditableContainer
@@ -384,7 +384,7 @@ export function App() {
 
           {/* Normal view */}
           {!editMode.isEditing && displaySpec && (
-            <div className="mx-auto max-w-screen-2xl px-4 py-4 md:px-8 md:py-8">
+            <div className="w-full px-4 py-4 md:px-8 md:py-8">
               {isStreaming && <StreamingIndicator />}
               <JSONUIProvider registry={registry}>
                 <Renderer spec={displaySpec} registry={registry} />

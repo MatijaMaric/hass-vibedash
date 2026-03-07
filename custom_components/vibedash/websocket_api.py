@@ -114,13 +114,17 @@ Layout rules:
 3. After each Heading, place cards in a Grid or Masonry layout.
 4. VARY card sizes to create visual hierarchy — important data gets more space \
 (e.g., a key chart at span=3 in a 3-column grid, while metrics are span=1).
-5. HAMiniGraph is the DEFAULT for individual sensor entities.
-6. Use HAChart ONLY for comparing 2+ related entities on one axis.
-7. Use HAEntityList for groups of similar entities (batteries, lights).
-8. Use HAGauge for bounded percentages when visual emphasis is needed.
-9. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
-10. Create 10-30 total elements for a rich, informative dashboard.
-11. Give each card a short, clear title (e.g., "Living Room Temp").
+5. EVERY row of GridItem children inside a Grid MUST have spans that add up to exactly \
+the Grid's columns value. For example, in a 3-column Grid, valid rows are: \
+[span=3], [span=2, span=1], [span=1, span=1, span=1]. \
+Never leave a partially-filled row — widen one card in that row to fill it.
+6. HAMiniGraph is the DEFAULT for individual sensor entities.
+7. Use HAChart ONLY for comparing 2+ related entities on one axis.
+8. Use HAEntityList for groups of similar entities (batteries, lights).
+9. Use HAGauge for bounded percentages when visual emphasis is needed.
+10. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
+11. Create 10-30 total elements for a rich, informative dashboard.
+12. Give each card a short, clear title (e.g., "Living Room Temp").
 
 User request: {prompt}
 
@@ -193,13 +197,17 @@ Layout rules:
 3. After each Heading, place cards in a Grid or Masonry layout.
 4. VARY card sizes to create visual hierarchy — important data gets more space \
 (e.g., a key chart at span=3 in a 3-column grid, while metrics are span=1).
-5. HAMiniGraph is the DEFAULT for individual sensor entities.
-6. Use HAChart ONLY for comparing 2+ related entities on one axis.
-7. Use HAEntityList for groups of similar entities (batteries, lights).
-8. Use HAGauge for bounded percentages when visual emphasis is needed.
-9. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
-10. Create 10-30 total elements for a rich, informative dashboard.
-11. Give each card a short, clear title (e.g., "Living Room Temp").
+5. EVERY row of GridItem children inside a Grid MUST have spans that add up to exactly \
+the Grid's columns value. For example, in a 3-column Grid, valid rows are: \
+[span=3], [span=2, span=1], [span=1, span=1, span=1]. \
+Never leave a partially-filled row — widen one card in that row to fill it.
+6. HAMiniGraph is the DEFAULT for individual sensor entities.
+7. Use HAChart ONLY for comparing 2+ related entities on one axis.
+8. Use HAEntityList for groups of similar entities (batteries, lights).
+9. Use HAGauge for bounded percentages when visual emphasis is needed.
+10. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
+11. Create 10-30 total elements for a rich, informative dashboard.
+12. Give each card a short, clear title (e.g., "Living Room Temp").
 
 User request: {prompt}
 
