@@ -24,19 +24,21 @@ from .const import (
     DEFAULT_BASE_URLS,
     DEFAULT_MODELS,
     DOMAIN,
+    PROVIDER_AI_TASK,
     STREAMING_PROVIDER_NONE,
     STREAMING_PROVIDER_OLLAMA,
     STREAMING_PROVIDERS,
 )
 
 
-def _streaming_schema(
-    provider: str = STREAMING_PROVIDER_NONE,
+def _provider_schema(
+    provider: str = PROVIDER_AI_TASK,
+    ai_task_entry: str = "",
     api_key: str = "",
     model: str = "",
     base_url: str = "",
 ) -> vol.Schema:
-    """Build the schema for the streaming configuration step."""
+    """Build the schema for the unified provider configuration step."""
     provider_options = [
         {"value": k, "label": v} for k, v in STREAMING_PROVIDERS.items()
     ]
@@ -47,11 +49,17 @@ def _streaming_schema(
         ),
     }
 
-    # Only show additional fields when a provider is selected
-    if provider != STREAMING_PROVIDER_NONE:
-        # Ollama doesn't need an API key
+    if provider == PROVIDER_AI_TASK:
+        # Show AI Task entity picker
+        schema[vol.Required(CONF_AI_TASK_ENTRY, default=ai_task_entry)] = selector(
+            {"entity": {"domain": "ai_task"}}
+        )
+    else:
+        # Show streaming provider fields
         if provider != STREAMING_PROVIDER_OLLAMA:
-            schema[vol.Required(CONF_STREAMING_API_KEY, default=api_key)] = str
+            schema[vol.Required(CONF_STREAMING_API_KEY, default=api_key)] = selector(
+                {"text": {"type": "password"}}
+            )
 
         schema[
             vol.Optional(
@@ -87,53 +95,40 @@ class VibeDashConfigFlow(ConfigFlow, domain=DOMAIN):
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Handle the initial step — select AI Task provider."""
+        """Handle provider configuration in a single step."""
         # Only allow a single instance
         await self.async_set_unique_id(DOMAIN)
         self._abort_if_unique_id_configured()
 
-        if user_input is not None:
-            self._data.update(user_input)
-            return await self.async_step_streaming()
-
-        # Find available AI Task entities
-        ai_task_entities = self.hass.states.async_entity_ids("ai_task")
-        if not ai_task_entities:
-            return self.async_abort(reason="no_ai_task")
-
-        return self.async_show_form(
-            step_id="user",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_AI_TASK_ENTRY): selector(
-                        {"entity": {"domain": "ai_task"}}
-                    ),
-                }
-            ),
-        )
-
-    async def async_step_streaming(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Handle the optional streaming provider configuration."""
         errors: dict[str, str] = {}
 
         if user_input is not None:
-            provider = user_input.get(CONF_STREAMING_PROVIDER, STREAMING_PROVIDER_NONE)
+            provider = user_input.get(CONF_STREAMING_PROVIDER, PROVIDER_AI_TASK)
 
-            if provider == STREAMING_PROVIDER_NONE:
-                # No streaming — just save and finish
-                self._data[CONF_STREAMING_PROVIDER] = STREAMING_PROVIDER_NONE
+            if provider == PROVIDER_AI_TASK:
+                # AI Task path — need entity picker
+                if CONF_AI_TASK_ENTRY not in user_input:
+                    # Re-render with AI Task entity picker
+                    return self.async_show_form(
+                        step_id="user",
+                        data_schema=_provider_schema(provider=PROVIDER_AI_TASK),
+                        errors=errors,
+                    )
+
+                # Validate that an entity was selected
+                self._data.update(user_input)
+                self._data[CONF_STREAMING_PROVIDER] = PROVIDER_AI_TASK
                 return self.async_create_entry(title="VibeDash", data=self._data)
 
-            # If provider selected but more fields needed, show expanded form
+            # Streaming provider path
             if (
                 CONF_STREAMING_API_KEY not in user_input
                 and provider != STREAMING_PROVIDER_OLLAMA
             ):
+                # Re-render with streaming fields
                 return self.async_show_form(
-                    step_id="streaming",
-                    data_schema=_streaming_schema(provider=provider),
+                    step_id="user",
+                    data_schema=_provider_schema(provider=provider),
                     errors=errors,
                 )
 
@@ -151,8 +146,8 @@ class VibeDashConfigFlow(ConfigFlow, domain=DOMAIN):
             if not valid:
                 errors["base"] = "streaming_validation_failed"
                 return self.async_show_form(
-                    step_id="streaming",
-                    data_schema=_streaming_schema(
+                    step_id="user",
+                    data_schema=_provider_schema(
                         provider=provider,
                         api_key=api_key,
                         model=model or "",
@@ -165,15 +160,16 @@ class VibeDashConfigFlow(ConfigFlow, domain=DOMAIN):
             self._data.update(user_input)
             return self.async_create_entry(title="VibeDash", data=self._data)
 
+        # Initial render — show provider dropdown only (defaults to AI Task)
         return self.async_show_form(
-            step_id="streaming",
-            data_schema=_streaming_schema(),
+            step_id="user",
+            data_schema=_provider_schema(),
             errors=errors,
         )
 
 
 class VibeDashOptionsFlow(OptionsFlow):
-    """Handle VibeDash options (e.g. switching the AI Task provider)."""
+    """Handle VibeDash options."""
 
     def __init__(self, config_entry: ConfigEntry) -> None:
         """Initialize options flow."""
@@ -182,53 +178,50 @@ class VibeDashOptionsFlow(OptionsFlow):
     async def async_step_init(
         self, user_input: dict[str, Any] | None = None
     ) -> ConfigFlowResult:
-        """Manage the options — AI Task provider selection."""
-        if user_input is not None:
-            return await self.async_step_streaming(user_input=None)
-
-        current = self._config_entry.data.get(
-            CONF_AI_TASK_ENTRY
-        ) or self._config_entry.options.get(CONF_AI_TASK_ENTRY)
-
-        return self.async_show_form(
-            step_id="init",
-            data_schema=vol.Schema(
-                {
-                    vol.Required(CONF_AI_TASK_ENTRY, default=current): selector(
-                        {"entity": {"domain": "ai_task"}}
-                    ),
-                }
-            ),
-        )
-
-    async def async_step_streaming(
-        self, user_input: dict[str, Any] | None = None
-    ) -> ConfigFlowResult:
-        """Manage streaming provider options."""
+        """Manage all options in a single step."""
         errors: dict[str, str] = {}
 
         # Get current values from entry data/options
         current_data = {**self._config_entry.data, **self._config_entry.options}
 
-        if user_input is not None:
-            provider = user_input.get(CONF_STREAMING_PROVIDER, STREAMING_PROVIDER_NONE)
+        # Treat legacy "none" as "ai_task"
+        current_provider = current_data.get(CONF_STREAMING_PROVIDER, PROVIDER_AI_TASK)
+        if current_provider == STREAMING_PROVIDER_NONE:
+            current_provider = PROVIDER_AI_TASK
 
-            if provider == STREAMING_PROVIDER_NONE:
-                # Clear streaming config
+        if user_input is not None:
+            provider = user_input.get(CONF_STREAMING_PROVIDER, PROVIDER_AI_TASK)
+
+            if provider == PROVIDER_AI_TASK:
+                if CONF_AI_TASK_ENTRY not in user_input:
+                    return self.async_show_form(
+                        step_id="init",
+                        data_schema=_provider_schema(
+                            provider=PROVIDER_AI_TASK,
+                            ai_task_entry=current_data.get(CONF_AI_TASK_ENTRY, ""),
+                        ),
+                        errors=errors,
+                    )
+
                 result_data = {
-                    CONF_AI_TASK_ENTRY: current_data.get(CONF_AI_TASK_ENTRY),
-                    CONF_STREAMING_PROVIDER: STREAMING_PROVIDER_NONE,
+                    CONF_STREAMING_PROVIDER: PROVIDER_AI_TASK,
+                    CONF_AI_TASK_ENTRY: user_input[CONF_AI_TASK_ENTRY],
                 }
                 return self.async_create_entry(title="", data=result_data)
 
-            # If provider selected but more fields needed, show expanded form
+            # Streaming provider path
             if (
                 CONF_STREAMING_API_KEY not in user_input
                 and provider != STREAMING_PROVIDER_OLLAMA
             ):
                 return self.async_show_form(
-                    step_id="streaming",
-                    data_schema=_streaming_schema(provider=provider),
+                    step_id="init",
+                    data_schema=_provider_schema(
+                        provider=provider,
+                        api_key=current_data.get(CONF_STREAMING_API_KEY, ""),
+                        model=current_data.get(CONF_STREAMING_MODEL, ""),
+                        base_url=current_data.get(CONF_STREAMING_BASE_URL, ""),
+                    ),
                     errors=errors,
                 )
 
@@ -246,8 +239,8 @@ class VibeDashOptionsFlow(OptionsFlow):
             if not valid:
                 errors["base"] = "streaming_validation_failed"
                 return self.async_show_form(
-                    step_id="streaming",
-                    data_schema=_streaming_schema(
+                    step_id="init",
+                    data_schema=_provider_schema(
                         provider=provider,
                         api_key=api_key,
                         model=model or "",
@@ -258,18 +251,19 @@ class VibeDashOptionsFlow(OptionsFlow):
                 )
 
             result_data = {
-                CONF_AI_TASK_ENTRY: current_data.get(CONF_AI_TASK_ENTRY),
-                **user_input,
+                CONF_STREAMING_PROVIDER: provider,
+                CONF_STREAMING_API_KEY: api_key,
+                CONF_STREAMING_MODEL: model or "",
+                CONF_STREAMING_BASE_URL: base_url or "",
             }
             return self.async_create_entry(title="", data=result_data)
 
         # Show form with current values
         return self.async_show_form(
-            step_id="streaming",
-            data_schema=_streaming_schema(
-                provider=current_data.get(
-                    CONF_STREAMING_PROVIDER, STREAMING_PROVIDER_NONE
-                ),
+            step_id="init",
+            data_schema=_provider_schema(
+                provider=current_provider,
+                ai_task_entry=current_data.get(CONF_AI_TASK_ENTRY, ""),
                 api_key=current_data.get(CONF_STREAMING_API_KEY, ""),
                 model=current_data.get(CONF_STREAMING_MODEL, ""),
                 base_url=current_data.get(CONF_STREAMING_BASE_URL, ""),

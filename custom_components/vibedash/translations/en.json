@@ -3,16 +3,10 @@
     "step": {
       "user": {
         "title": "Set up VibeDash",
-        "description": "Select the AI Task provider to use for generating dashboards.",
+        "description": "Choose how VibeDash connects to an LLM. Select 'AI Task' to use a Home Assistant integration, or pick a provider for direct API access with streaming.",
         "data": {
-          "ai_task_entry": "AI Task Provider"
-        }
-      },
-      "streaming": {
-        "title": "Streaming (Optional)",
-        "description": "Optionally configure a direct LLM connection for real-time streaming responses. If skipped, VibeDash uses the AI Task provider above (non-streaming).",
-        "data": {
-          "streaming_provider": "Streaming Provider",
+          "streaming_provider": "Provider",
+          "ai_task_entry": "AI Task Entity",
           "streaming_api_key": "API Key",
           "streaming_model": "Model",
           "streaming_base_url": "API Base URL"
@@ -20,27 +14,20 @@
       }
     },
     "abort": {
-      "already_configured": "VibeDash is already configured.",
-      "no_ai_task": "No AI Task integrations found. Please set up an AI Task provider first."
+      "already_configured": "VibeDash is already configured."
     },
     "error": {
-      "streaming_validation_failed": "Could not connect to streaming provider: {error_detail}"
+      "streaming_validation_failed": "Could not connect to provider: {error_detail}"
     }
   },
   "options": {
     "step": {
       "init": {
         "title": "VibeDash Options",
-        "description": "Change the AI Task provider used for generating dashboards.",
+        "description": "Change the LLM provider used for generating dashboards.",
         "data": {
-          "ai_task_entry": "AI Task Provider"
-        }
-      },
-      "streaming": {
-        "title": "Streaming Configuration",
-        "description": "Configure a direct LLM connection for real-time streaming responses. Select 'None' to disable streaming and use the AI Task provider instead.",
-        "data": {
-          "streaming_provider": "Streaming Provider",
+          "streaming_provider": "Provider",
+          "ai_task_entry": "AI Task Entity",
           "streaming_api_key": "API Key",
           "streaming_model": "Model",
           "streaming_base_url": "API Base URL"
