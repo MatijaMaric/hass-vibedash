@@ -30,7 +30,7 @@ export function EditableCard({
   };
 
   return (
-    <div ref={setNodeRef} style={style} className="group/edit relative">
+    <div ref={setNodeRef} style={{ ...style, isolation: "isolate" }} className="group/edit relative">
       {/* Edit overlay controls — visible on hover */}
       <div className="pointer-events-none absolute inset-0 z-10 rounded-xl border-2 border-dashed border-transparent transition-colors group-hover/edit:border-primary/40" />
 
@@ -68,7 +68,12 @@ export function EditableCard({
       </button>
 
       {/* Card content */}
-      <div className="pointer-events-none select-none">{children}</div>
+      <div
+        className="select-none overflow-hidden"
+        style={{ pointerEvents: "none", position: "relative", zIndex: 0 }}
+      >
+        {children}
+      </div>
     </div>
   );
 }

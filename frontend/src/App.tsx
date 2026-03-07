@@ -85,67 +85,43 @@ function EditableContainer({
     }),
   );
 
-  // Read actual container props from the spec so edit mode matches view mode
-  const containerEl = spec.elements[containerId] as {
-    type?: string;
-    props?: Record<string, unknown>;
-  };
-  const containerProps = containerEl?.props ?? {};
-
-  const colsMap: Record<number, string> = {
-    1: "grid-cols-1",
-    2: "grid-cols-2",
-    3: "grid-cols-3",
-    4: "grid-cols-4",
-    5: "grid-cols-5",
-    6: "grid-cols-6",
-  };
-  const masonryColsMap: Record<number, string> = {
-    2: "columns-2",
-    3: "columns-3",
-    4: "columns-4",
-  };
-  const gapMap: Record<string, string> = {
-    sm: "gap-3",
-    md: "gap-4",
-    lg: "gap-6",
-  };
-
-  const layoutClass =
-    containerType === "Masonry"
-      ? `${masonryColsMap[Math.max(2, Math.min(4, (containerProps.columns as number) ?? 3))] ?? "columns-3"} [&>*]:mb-6 [&>*]:break-inside-avoid`
-      : containerType === "Grid"
-        ? `grid ${colsMap[Math.max(1, Math.min(6, (containerProps.columns as number) ?? 3))] ?? "grid-cols-3"} ${gapMap[(containerProps.gap as string) ?? "md"] ?? "gap-4"}`
-        : "flex flex-col gap-4 items-stretch";
-
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={onDragEnd}
-    >
-      <SortableContext
-        items={childIds}
-        strategy={verticalListSortingStrategy}
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="font-medium">{containerType}</span>
+        <span>&middot;</span>
+        <span>
+          {childIds.length} {childIds.length === 1 ? "item" : "items"}
+        </span>
+      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={onDragEnd}
       >
-        <div className={layoutClass}>
-          {childIds.map((childId) => (
-            <EditableCard
-              key={childId}
-              elementId={childId}
-              onRemove={onRemove}
-            >
-              <JSONUIProvider registry={registry}>
-                <Renderer
-                  spec={{ root: childId, elements: spec.elements }}
-                  registry={registry}
-                />
-              </JSONUIProvider>
-            </EditableCard>
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+        <SortableContext
+          items={childIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="flex flex-col gap-4">
+            {childIds.map((childId) => (
+              <EditableCard
+                key={childId}
+                elementId={childId}
+                onRemove={onRemove}
+              >
+                <JSONUIProvider registry={registry}>
+                  <Renderer
+                    spec={{ root: childId, elements: spec.elements }}
+                    registry={registry}
+                  />
+                </JSONUIProvider>
+              </EditableCard>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
   );
 }
 
