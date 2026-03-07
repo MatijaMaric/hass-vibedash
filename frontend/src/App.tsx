@@ -85,42 +85,43 @@ function EditableContainer({
     }),
   );
 
-  // Choose layout CSS based on container type
-  const layoutClass =
-    containerType === "Masonry"
-      ? "columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid"
-      : containerType === "Grid"
-        ? "grid grid-cols-3 gap-5"
-        : "flex flex-col gap-5";
-
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragEnd={onDragEnd}
-    >
-      <SortableContext
-        items={childIds}
-        strategy={verticalListSortingStrategy}
+    <div>
+      <div className="mb-2 flex items-center gap-2 text-xs text-muted-foreground">
+        <span className="font-medium">{containerType}</span>
+        <span>&middot;</span>
+        <span>
+          {childIds.length} {childIds.length === 1 ? "item" : "items"}
+        </span>
+      </div>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={closestCenter}
+        onDragEnd={onDragEnd}
       >
-        <div className={layoutClass}>
-          {childIds.map((childId) => (
-            <EditableCard
-              key={childId}
-              elementId={childId}
-              onRemove={onRemove}
-            >
-              <JSONUIProvider registry={registry}>
-                <Renderer
-                  spec={{ root: childId, elements: spec.elements }}
-                  registry={registry}
-                />
-              </JSONUIProvider>
-            </EditableCard>
-          ))}
-        </div>
-      </SortableContext>
-    </DndContext>
+        <SortableContext
+          items={childIds}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="flex flex-col gap-4">
+            {childIds.map((childId) => (
+              <EditableCard
+                key={childId}
+                elementId={childId}
+                onRemove={onRemove}
+              >
+                <JSONUIProvider registry={registry}>
+                  <Renderer
+                    spec={{ root: childId, elements: spec.elements }}
+                    registry={registry}
+                  />
+                </JSONUIProvider>
+              </EditableCard>
+            ))}
+          </div>
+        </SortableContext>
+      </DndContext>
+    </div>
   );
 }
 
