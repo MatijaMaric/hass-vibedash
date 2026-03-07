@@ -88,10 +88,10 @@ function EditableContainer({
   // Choose layout CSS based on container type
   const layoutClass =
     containerType === "Masonry"
-      ? "columns-3 [&>*]:mb-5 [&>*]:break-inside-avoid"
+      ? "columns-3 [&>*]:mb-6 [&>*]:break-inside-avoid"
       : containerType === "Grid"
-        ? "grid grid-cols-3 gap-5"
-        : "flex flex-col gap-5";
+        ? "grid grid-cols-3 gap-6"
+        : "flex flex-col gap-6";
 
   return (
     <DndContext
