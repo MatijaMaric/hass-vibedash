@@ -10,8 +10,17 @@ from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.storage import Store
 
-from .const import DOMAIN, PANEL_FRONTEND_PATH, PANEL_ICON, PANEL_TITLE, PANEL_URL
+from .const import (
+    DASHBOARDS_STORAGE_KEY,
+    DASHBOARDS_STORAGE_VERSION,
+    DOMAIN,
+    PANEL_FRONTEND_PATH,
+    PANEL_ICON,
+    PANEL_TITLE,
+    PANEL_URL,
+)
 from .entity_cache import VibeDashEntityCache
 from .websocket_api import async_register_commands
 
@@ -36,6 +45,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entity_cache = VibeDashEntityCache(hass)
     await entity_cache.async_initialize()
     hass.data[DOMAIN]["entity_cache"] = entity_cache
+
+    # Initialize dashboard storage
+    dashboard_store = Store(hass, DASHBOARDS_STORAGE_VERSION, DASHBOARDS_STORAGE_KEY)
+    hass.data[DOMAIN]["dashboard_store"] = dashboard_store
 
     # Register WebSocket API commands
     async_register_commands(hass)

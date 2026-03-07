@@ -47,6 +47,9 @@ DEFAULT_BASE_URLS = {
 STORAGE_KEY = "vibedash_entity_cache"
 STORAGE_VERSION = 1
 
+DASHBOARDS_STORAGE_KEY = "vibedash_dashboards"
+DASHBOARDS_STORAGE_VERSION = 1
+
 PANEL_URL = "/vibedash"
 PANEL_TITLE = "VibeDash"
 PANEL_ICON = "mdi:creation"

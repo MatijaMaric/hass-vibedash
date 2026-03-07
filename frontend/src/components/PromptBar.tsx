@@ -4,6 +4,9 @@ interface PromptBarProps {
   onSubmit: (prompt: string) => void;
   loading: boolean;
   history: string[];
+  onSave?: () => void;
+  canSave?: boolean;
+  onToggleSidebar?: () => void;
 }
 
 const SUGGESTIONS = [
@@ -13,7 +16,14 @@ const SUGGESTIONS = [
   "Give me a security overview",
 ];
 
-export function PromptBar({ onSubmit, loading, history }: PromptBarProps) {
+export function PromptBar({
+  onSubmit,
+  loading,
+  history,
+  onSave,
+  canSave,
+  onToggleSidebar,
+}: PromptBarProps) {
   const [input, setInput] = useState("");
 
   function handleSubmit(e: FormEvent) {
@@ -36,6 +46,25 @@ export function PromptBar({ onSubmit, loading, history }: PromptBarProps) {
       <div className="mx-auto max-w-5xl px-4 py-3">
         {/* Brand + Input Row */}
         <form onSubmit={handleSubmit} className="flex items-center gap-3">
+          {/* Mobile sidebar toggle */}
+          {onToggleSidebar && (
+            <button
+              type="button"
+              onClick={onToggleSidebar}
+              className="cursor-pointer rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground md:hidden"
+              aria-label="Toggle saved dashboards"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M4 6h16M4 12h16M4 18h16"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                />
+              </svg>
+            </button>
+          )}
+
           <div className="flex items-center gap-2 text-primary">
             <svg
               viewBox="0 0 24 24"
@@ -93,6 +122,26 @@ export function PromptBar({ onSubmit, loading, history }: PromptBarProps) {
               )}
             </button>
           </div>
+
+          {/* Save button */}
+          {onSave && canSave && (
+            <button
+              type="button"
+              onClick={onSave}
+              className="shrink-0 cursor-pointer rounded-full p-2 text-muted-foreground transition-colors hover:bg-muted hover:text-primary"
+              aria-label="Save dashboard"
+            >
+              <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none">
+                <path
+                  d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                />
+              </svg>
+            </button>
+          )}
         </form>
 
         {/* History chips */}

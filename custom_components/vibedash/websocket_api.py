@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timedelta
+import uuid
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 import voluptuous as vol
@@ -247,6 +248,9 @@ def async_register_commands(hass: HomeAssistant) -> None:
     websocket_api.async_register_command(hass, ws_history)
     websocket_api.async_register_command(hass, ws_entities)
     websocket_api.async_register_command(hass, ws_streaming_status)
+    websocket_api.async_register_command(hass, ws_dashboard_list)
+    websocket_api.async_register_command(hass, ws_dashboard_save)
+    websocket_api.async_register_command(hass, ws_dashboard_delete)
 
 
 @websocket_api.websocket_command(
@@ -717,6 +721,98 @@ def ws_entities(
             "total": len(entities),
         },
     )
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/dashboard_list",
+    }
+)
+@websocket_api.async_response
+async def ws_dashboard_list(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Return all saved dashboards."""
+    store = hass.data[DOMAIN].get("dashboard_store")
+    if not store:
+        connection.send_result(msg["id"], {"dashboards": []})
+        return
+
+    data = await store.async_load()
+    dashboards = data.get("dashboards", []) if data else []
+    dashboards.sort(key=lambda d: d.get("created_at", ""), reverse=True)
+    connection.send_result(msg["id"], {"dashboards": dashboards})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/dashboard_save",
+        vol.Required("name"): str,
+        vol.Required("prompt"): str,
+        vol.Required("dashboard"): dict,
+    }
+)
+@websocket_api.async_response
+async def ws_dashboard_save(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Save a dashboard."""
+    store = hass.data[DOMAIN].get("dashboard_store")
+    if not store:
+        connection.send_error(msg["id"], "no_store", "Dashboard store not initialized")
+        return
+
+    data = await store.async_load() or {"dashboards": []}
+    dashboards = data.get("dashboards", [])
+
+    now = datetime.now(timezone.utc).isoformat()
+    record = {
+        "id": uuid.uuid4().hex,
+        "name": msg["name"],
+        "prompt": msg["prompt"],
+        "dashboard": msg["dashboard"],
+        "created_at": now,
+        "updated_at": now,
+    }
+    dashboards.append(record)
+    await store.async_save({"dashboards": dashboards})
+    connection.send_result(msg["id"], {"saved": record})
+
+
+@websocket_api.websocket_command(
+    {
+        vol.Required("type"): "vibedash/dashboard_delete",
+        vol.Required("dashboard_id"): str,
+    }
+)
+@websocket_api.async_response
+async def ws_dashboard_delete(
+    hass: HomeAssistant,
+    connection: websocket_api.ActiveConnection,
+    msg: dict[str, Any],
+) -> None:
+    """Delete a saved dashboard."""
+    store = hass.data[DOMAIN].get("dashboard_store")
+    if not store:
+        connection.send_error(msg["id"], "no_store", "Dashboard store not initialized")
+        return
+
+    data = await store.async_load() or {"dashboards": []}
+    dashboards = data.get("dashboards", [])
+
+    original_len = len(dashboards)
+    dashboards = [d for d in dashboards if d["id"] != msg["dashboard_id"]]
+
+    if len(dashboards) == original_len:
+        connection.send_error(msg["id"], "not_found", "Dashboard not found")
+        return
+
+    await store.async_save({"dashboards": dashboards})
+    connection.send_result(msg["id"], {"deleted": True})
 
 
 def _downsample(points: list[dict[str, Any]], max_points: int) -> list[dict[str, Any]]:
