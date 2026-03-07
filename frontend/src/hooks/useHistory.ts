@@ -10,6 +10,15 @@ interface HistoryResult {
   history: Record<string, Array<{ t: string; y: number }>>;
 }
 
+/** Bucket intervals in milliseconds, keyed by time range. */
+const BUCKET_INTERVALS: Record<string, number> = {
+  "1h": 1 * 60 * 1000, // 1 min  → 60 buckets
+  "6h": 5 * 60 * 1000, // 5 min  → 72 buckets
+  "24h": 10 * 60 * 1000, // 10 min → 144 buckets
+  "7d": 60 * 60 * 1000, // 1 hr   → 168 buckets
+  "30d": 4 * 60 * 60 * 1000, // 4 hr   → 180 buckets
+};
+
 /**
  * Fetch entity history from HA recorder via the vibedash/history WebSocket command.
  * Returns data formatted for Recharts (array of {time, entity1: val, entity2: val}).
@@ -37,7 +46,8 @@ export function useHistory(
     })
       .then((result) => {
         if (cancelled) return;
-        setData(transformHistory(result.history, entityIds));
+        const transformed = transformHistory(result.history, entityIds);
+        setData(resampleHistory(transformed, entityIds, timeRange));
         setLoading(false);
       })
       .catch((err) => {
@@ -103,4 +113,80 @@ function transformHistory(
   }
 
   return sorted;
+}
+
+/**
+ * Resample irregularly-spaced history data into evenly-spaced time buckets.
+ * Uses last-known-value (step) interpolation, matching HA sensor semantics
+ * where a value persists until the next state change.
+ */
+function resampleHistory(
+  sorted: HistoryPoint[],
+  entityIds: string[],
+  timeRange: string,
+): HistoryPoint[] {
+  if (sorted.length < 2) return sorted;
+
+  const interval = BUCKET_INTERVALS[timeRange];
+  if (!interval) return sorted;
+
+  const startMs = new Date(sorted[0].time).getTime();
+  const endMs = new Date(sorted[sorted.length - 1].time).getTime();
+
+  if (endMs - startMs < interval) return sorted;
+
+  // Build evenly-spaced bucket timestamps
+  const buckets: HistoryPoint[] = [];
+  for (let t = startMs; t <= endMs; t += interval) {
+    buckets.push({ time: new Date(t).toISOString() });
+  }
+  // Include final point if it's more than half a bucket past the last regular bucket
+  const lastBucketMs = new Date(buckets[buckets.length - 1].time).getTime();
+  if (endMs - lastBucketMs > interval * 0.5) {
+    buckets.push({ time: new Date(endMs).toISOString() });
+  }
+
+  // Fill buckets using last-known-value via single-pass scan
+  let srcIdx = 0;
+  const lastKnown: Record<string, number | null> = {};
+  for (const eid of entityIds) {
+    lastKnown[eid] = null;
+  }
+
+  for (const bucket of buckets) {
+    const bucketMs = new Date(bucket.time).getTime();
+
+    // Advance source pointer to the last point at or before this bucket
+    while (
+      srcIdx < sorted.length - 1 &&
+      new Date(sorted[srcIdx + 1].time).getTime() <= bucketMs
+    ) {
+      for (const eid of entityIds) {
+        const v = sorted[srcIdx][eid];
+        if (v !== undefined && v !== null) {
+          lastKnown[eid] = v as number;
+        }
+      }
+      srcIdx++;
+    }
+
+    // Check current source point
+    if (new Date(sorted[srcIdx].time).getTime() <= bucketMs) {
+      for (const eid of entityIds) {
+        const v = sorted[srcIdx][eid];
+        if (v !== undefined && v !== null) {
+          lastKnown[eid] = v as number;
+        }
+      }
+    }
+
+    // Assign last known values to this bucket
+    for (const eid of entityIds) {
+      if (lastKnown[eid] !== null) {
+        bucket[eid] = lastKnown[eid];
+      }
+    }
+  }
+
+  return buckets;
 }
