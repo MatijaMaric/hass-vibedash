@@ -98,7 +98,9 @@ GRID + GRIDITEM (structured layouts with emphasis):
 Use when you want precise control over card widths. Place cards in a Grid (typically \
 columns=3 or columns=4) and wrap each child in GridItem with the appropriate span. \
 Wide cards like HAChart or HAEntityList get span=2 or span=3. \
-Compact cards like HAMiniGraph, HAMetric, HAGauge get span=1.
+Compact cards like HAMiniGraph, HAMetric, HAGauge MUST use span=1 so that \
+multiple cards appear side-by-side in a single row. NEVER place compact cards \
+at full grid width — they should always share a row with other cards.
 
 MASONRY (dense overview layouts):
 Use when you have many cards of different heights and want them to pack tightly. \
@@ -118,13 +120,27 @@ Layout rules:
 the Grid's columns value. For example, in a 3-column Grid, valid rows are: \
 [span=3], [span=2, span=1], [span=1, span=1, span=1]. \
 Never leave a partially-filled row — widen one card in that row to fill it.
-6. HAMiniGraph is the DEFAULT for individual sensor entities.
-7. Use HAChart ONLY for comparing 2+ related entities on one axis.
-8. Use HAEntityList for groups of similar entities (batteries, lights).
-9. Use HAGauge for bounded percentages when visual emphasis is needed.
-10. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
-11. Create 10-30 total elements for a rich, informative dashboard.
-12. Give each card a short, clear title (e.g., "Living Room Temp").
+6. COMPACT CARD GRID RULE: When you have 3+ compact cards (HAMiniGraph, HAMetric, \
+HAGauge), ALWAYS place them inside ONE Grid with columns=3 (or columns=4 if 4+ cards). \
+Each compact card gets its own GridItem with span=1. Do NOT stack compact cards \
+in separate full-width rows — group them together in a multi-column Grid.
+7. HAMiniGraph is the DEFAULT for individual sensor entities.
+8. Use HAChart ONLY for comparing 2+ related entities on one axis.
+9. Use HAEntityList for groups of similar entities (batteries, lights).
+10. Use HAGauge for bounded percentages when visual emphasis is needed.
+11. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
+12. Create 10-30 total elements for a rich, informative dashboard.
+13. Give each card a short, clear title (e.g., "Living Room Temp").
+
+EXAMPLE — correct layout for 6 sensor entities in a category:
+"grid_sensors": {{"type": "Grid", "props": {{"columns": 3, "gap": "md"}}, \
+"children": ["gi_1", "gi_2", "gi_3", "gi_4", "gi_5", "gi_6"]}},
+"gi_1": {{"type": "GridItem", "props": {{"span": 1}}, "children": ["mini_1"]}},
+"gi_2": {{"type": "GridItem", "props": {{"span": 1}}, "children": ["mini_2"]}},
+...
+This produces 2 rows of 3 compact cards each.
+WRONG: putting each HAMiniGraph in a span=3 GridItem (full width).
+RIGHT: span=1 so 3 cards fit per row.
 
 User request: {prompt}
 
@@ -181,7 +197,9 @@ GRID + GRIDITEM (structured layouts with emphasis):
 Use when you want precise control over card widths. Place cards in a Grid (typically \
 columns=3 or columns=4) and wrap each child in GridItem with the appropriate span. \
 Wide cards like HAChart or HAEntityList get span=2 or span=3. \
-Compact cards like HAMiniGraph, HAMetric, HAGauge get span=1.
+Compact cards like HAMiniGraph, HAMetric, HAGauge MUST use span=1 so that \
+multiple cards appear side-by-side in a single row. NEVER place compact cards \
+at full grid width — they should always share a row with other cards.
 
 MASONRY (dense overview layouts):
 Use when you have many cards of different heights and want them to pack tightly. \
@@ -201,13 +219,26 @@ Layout rules:
 the Grid's columns value. For example, in a 3-column Grid, valid rows are: \
 [span=3], [span=2, span=1], [span=1, span=1, span=1]. \
 Never leave a partially-filled row — widen one card in that row to fill it.
-6. HAMiniGraph is the DEFAULT for individual sensor entities.
-7. Use HAChart ONLY for comparing 2+ related entities on one axis.
-8. Use HAEntityList for groups of similar entities (batteries, lights).
-9. Use HAGauge for bounded percentages when visual emphasis is needed.
-10. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
-11. Create 10-30 total elements for a rich, informative dashboard.
-12. Give each card a short, clear title (e.g., "Living Room Temp").
+6. COMPACT CARD GRID RULE: When you have 3+ compact cards (HAMiniGraph, HAMetric, \
+HAGauge), ALWAYS place them inside ONE Grid with columns=3 (or columns=4 if 4+ cards). \
+Each compact card gets its own GridItem with span=1. Do NOT stack compact cards \
+in separate full-width rows — group them together in a multi-column Grid.
+7. HAMiniGraph is the DEFAULT for individual sensor entities.
+8. Use HAChart ONLY for comparing 2+ related entities on one axis.
+9. Use HAEntityList for groups of similar entities (batteries, lights).
+10. Use HAGauge for bounded percentages when visual emphasis is needed.
+11. Use HAMarkdown sparingly — only for brief summaries if the request implies analysis.
+12. Create 10-30 total elements for a rich, informative dashboard.
+13. Give each card a short, clear title (e.g., "Living Room Temp").
+
+EXAMPLE — correct SpecStream for 3 sensor entities in a row:
+{{"op":"add","path":"/elements/grid_sensors","value":{{"type":"Grid","props":{{"columns":3,"gap":"md"}},"children":["gi_1","gi_2","gi_3"]}}}}
+{{"op":"add","path":"/elements/gi_1","value":{{"type":"GridItem","props":{{"span":1}},"children":["mini_1"]}}}}
+{{"op":"add","path":"/elements/gi_2","value":{{"type":"GridItem","props":{{"span":1}},"children":["mini_2"]}}}}
+{{"op":"add","path":"/elements/gi_3","value":{{"type":"GridItem","props":{{"span":1}},"children":["mini_3"]}}}}
+This produces 1 row of 3 compact cards.
+WRONG: putting each HAMiniGraph in a span=3 GridItem (full width).
+RIGHT: span=1 so 3 cards fit per row.
 
 User request: {prompt}
 
