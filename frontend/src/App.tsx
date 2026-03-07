@@ -106,17 +106,17 @@ function EditableContainer({
     4: "columns-4",
   };
   const gapMap: Record<string, string> = {
-    sm: "gap-2",
-    md: "gap-3",
-    lg: "gap-4",
+    sm: "gap-3",
+    md: "gap-4",
+    lg: "gap-6",
   };
 
   const layoutClass =
     containerType === "Masonry"
-      ? `${masonryColsMap[Math.max(2, Math.min(4, (containerProps.columns as number) ?? 3))] ?? "columns-3"} [&>*]:mb-5 [&>*]:break-inside-avoid`
+      ? `${masonryColsMap[Math.max(2, Math.min(4, (containerProps.columns as number) ?? 3))] ?? "columns-3"} [&>*]:mb-6 [&>*]:break-inside-avoid`
       : containerType === "Grid"
-        ? `grid ${colsMap[Math.max(1, Math.min(6, (containerProps.columns as number) ?? 3))] ?? "grid-cols-3"} ${gapMap[(containerProps.gap as string) ?? "md"] ?? "gap-3"}`
-        : "flex flex-col gap-3 items-stretch";
+        ? `grid ${colsMap[Math.max(1, Math.min(6, (containerProps.columns as number) ?? 3))] ?? "grid-cols-3"} ${gapMap[(containerProps.gap as string) ?? "md"] ?? "gap-4"}`
+        : "flex flex-col gap-4 items-stretch";
 
   return (
     <DndContext
