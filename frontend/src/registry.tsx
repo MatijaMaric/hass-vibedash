@@ -52,7 +52,12 @@ export const { registry } = defineRegistry(catalog, {
     },
     Grid: shadcnComponents.Grid,
     Heading: ({ props }) => {
-      const level = props.level ?? "h2";
+      const raw = props.level ?? 2;
+      const tag =
+        typeof raw === "number"
+          ? (`h${Math.min(Math.max(raw, 1), 4)}` as const)
+          : raw;
+      const level = tag as "h1" | "h2" | "h3" | "h4";
       const cls =
         level === "h1"
           ? "text-2xl font-bold"
