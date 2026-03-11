@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@source "../node_modules/@json-render/shadcn/dist";
 
 /*
  * Map Home Assistant CSS custom properties to shadcn/Tailwind theme tokens.
